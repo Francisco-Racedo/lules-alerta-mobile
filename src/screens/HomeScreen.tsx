@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, Modal, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -7,6 +7,7 @@ import * as Location from 'expo-location';
 export default function HomeScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -22,6 +23,27 @@ export default function HomeScreen() {
     })();
   }, []);
 
+  // Lógica del Botón de Pánico
+  const handlePanicSOS = () => {
+    Alert.alert(
+      "🚨 ALERTA S.O.S. ACTIVADA",
+      "Tu ubicación exacta ha sido enviada al centro de monitoreo. Un móvil policial está en camino.",
+      [{ text: "Entendido", style: "destructive" }]
+    );
+  };
+
+  const handleShortSOSPress = () => {
+    Alert.alert(
+      "Atención", 
+      "Para activar la alerta de pánico S.O.S., mantén presionado el botón rojo por 2 segundos."
+    );
+  };
+
+  const handleCategorySelect = (category: string) => {
+    console.log(`Categoría seleccionada: ${category}`);
+    setModalVisible(false);
+  };
+
   if (!location) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -33,7 +55,6 @@ export default function HomeScreen() {
     );
   }
 
-  // Motor Web oficial de Google Maps con tu API Key inyectada
   const mapHtml = `
     <!DOCTYPE html>
     <html>
@@ -56,7 +77,6 @@ export default function HomeScreen() {
             mapTypeId: 'roadmap'
           });
 
-          // Punto Azul del usuario
           new google.maps.Marker({
             position: userLocation,
             map: map,
@@ -71,7 +91,6 @@ export default function HomeScreen() {
           });
         }
       </script>
-      <!-- Aquí está tu clave oficial de Google vinculada al mapa -->
       <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDl_gYlW2aKNJ_jqNob0k3aYl4uB8Gw8HQ&callback=initMap"></script>
     </body>
     </html>
@@ -87,14 +106,78 @@ export default function HomeScreen() {
         bounces={false}
       />
       
-      <TouchableOpacity 
-        style={styles.fab} 
-        activeOpacity={0.8}
-        onPress={() => console.log("Abrir menú de reporte")}
+      {/* Controles Inferiores */}
+      <View style={styles.bottomContainer}>
+        {/* Botón Masivo S.O.S. */}
+        <TouchableOpacity 
+          style={styles.sosButton} 
+          activeOpacity={0.8}
+          onPress={handleShortSOSPress}
+          onLongPress={handlePanicSOS}
+          delayLongPress={1500}
+        >
+          <Ionicons name="warning" size={36} color="white" />
+          <Text style={styles.sosText}>S.O.S.</Text>
+        </TouchableOpacity>
+
+        {/* Botón Secundario de Menú */}
+        <TouchableOpacity 
+          style={styles.menuButton} 
+          activeOpacity={0.8}
+          onPress={() => setModalVisible(true)}
+        >
+          <Ionicons name="grid" size={28} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Modal de Reportes Regulares */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
       >
-        <Ionicons name="megaphone" size={24} color="white" />
-        <Text style={styles.fabText}>Reportar</Text>
-      </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Crear Reporte</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close-circle" size={28} color="#999" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.gridContainer}>
+              <TouchableOpacity style={styles.gridItem} onPress={() => handleCategorySelect('Seguridad')}>
+                <View style={[styles.iconContainer, { backgroundColor: '#4A90E2' }]}>
+                  <Ionicons name="shield-checkmark" size={32} color="white" />
+                </View>
+                <Text style={styles.gridText}>Robo / Sospecha</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.gridItem} onPress={() => handleCategorySelect('Salud')}>
+                <View style={[styles.iconContainer, { backgroundColor: '#50E3C2' }]}>
+                  <Ionicons name="medkit" size={32} color="white" />
+                </View>
+                <Text style={styles.gridText}>Asistencia Médica</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.gridItem} onPress={() => handleCategorySelect('Bomberos')}>
+                <View style={[styles.iconContainer, { backgroundColor: '#F5A623' }]}>
+                  <Ionicons name="flame" size={32} color="white" />
+                </View>
+                <Text style={styles.gridText}>Incendio / Rescate</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.gridItem} onPress={() => handleCategorySelect('Infraestructura')}>
+                <View style={[styles.iconContainer, { backgroundColor: '#8B572A' }]}>
+                  <Ionicons name="construct" size={32} color="white" />
+                </View>
+                <Text style={styles.gridText}>Infraestructura</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -102,22 +185,108 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   map: { flex: 1 },
-  fab: {
+  
+  bottomContainer: {
     position: 'absolute',
     bottom: 30,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    backgroundColor: '#E63946',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosButton: {
+    backgroundColor: '#D90429',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#D90429',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 10,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  sosText: {
+    color: 'white',
+    fontWeight: '900',
+    fontSize: 22,
+    marginTop: 2,
+    letterSpacing: 1,
+  },
+  menuButton: {
+    position: 'absolute',
+    right: 25,
+    bottom: 30,
+    backgroundColor: '#ffffff',
+    width: 60,
+    height: 60,
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#E63946',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
     elevation: 6,
   },
-  fabText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    paddingHorizontal: 25,
+    paddingTop: 20,
+    paddingBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    width: '45%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  iconContainer: {
+    width: 65,
+    height: 65,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  gridText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    textAlign: 'center',
+  }
 });
