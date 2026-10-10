@@ -4,8 +4,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import HomeScreen from '../screens/HomeScreen';
 import ReportFormScreen from '../screens/ReportFormScreen';
+// Importamos las nuevas pantallas de seguridad
+import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -16,7 +20,6 @@ const PlaceholderScreen = ({ title }: { title: string }) => (
   </View>
 );
 
-// 1. Agrupamos tus pestañas inferiores en su propia función
 function TabNavigator() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = 60 + insets.bottom;
@@ -61,15 +64,31 @@ function TabNavigator() {
   );
 }
 
-// 2. El enrutador principal controla si muestras las pestañas o el formulario
 export default function AppNavigator() {
   return (
-    <Stack.Navigator>
+    // Definimos Login como la puerta de entrada principal
+    <Stack.Navigator initialRouteName="Login">
+      
+      {/* 1. Flujo de Autenticación */}
+      <Stack.Screen 
+        name="Login" 
+        component={LoginScreen} 
+        options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="Register" 
+        component={RegisterScreen} 
+        options={{ headerShown: false }} 
+      />
+
+      {/* 2. Aplicación Principal (Protegida) */}
       <Stack.Screen 
         name="MainTabs" 
         component={TabNavigator} 
         options={{ headerShown: false }} 
       />
+      
+      {/* 3. Formularios y Modales */}
       <Stack.Screen 
         name="ReportForm" 
         component={ReportFormScreen} 
@@ -77,7 +96,7 @@ export default function AppNavigator() {
           title: 'Detalles del Reporte',
           headerStyle: { backgroundColor: '#E63946' },
           headerTintColor: '#fff',
-          presentation: 'modal' // Hace que la pantalla suba elegantemente desde abajo
+          presentation: 'modal'
         }} 
       />
     </Stack.Navigator>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, Modal, Alert } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, Modal, Alert, DeviceEventEmitter } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -8,6 +8,18 @@ export default function HomeScreen({ navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  // NUEVO: Escuchamos la señal de radio silenciosa para abrir el modal sin recargar
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('reopenCategoryModal', () => {
+      setModalVisible(true);
+    });
+    
+    // Limpiamos el escuchador si la pantalla se destruye
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -39,8 +51,10 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleCategorySelect = (category: string) => {
-    // LA MAGIA ESTÁ AQUÍ: Ya no cerramos el modal. Simplemente viajamos sobre él.
-    navigation.navigate('ReportForm', { category, location });
+    setModalVisible(false);
+    setTimeout(() => {
+      navigation.navigate('ReportForm', { category, location });
+    }, 250);
   };
 
   const mapHtml = useMemo(() => {
