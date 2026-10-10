@@ -14,6 +14,7 @@ export default function RegisterScreen({ navigation }: any) {
   const [telefono, setTelefono] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Estado para controlar el proceso de carga
 
   // Estados de error visuales
   const [errores, setErrores] = useState({ nombre: '', dni: '', telefono: '', password: '' });
@@ -41,7 +42,7 @@ export default function RegisterScreen({ navigation }: any) {
     if (errores.password) setErrores({ ...errores, password: '' });
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     let isValid = true;
     let nuevosErrores = { nombre: '', dni: '', telefono: '', password: '' };
 
@@ -60,9 +61,48 @@ export default function RegisterScreen({ navigation }: any) {
 
     if (!isValid) return;
     
-    Alert.alert('Registro Exitoso', 'Tu cuenta ha sido creada. Ahora puedes iniciar sesión.', [
-      { text: 'Ir al Login', onPress: () => navigation.goBack() }
-    ]);
+    // Inicia el proceso de envío
+    setIsLoading(true);
+
+    try {
+      // Petición al servidor usando tu dirección IP local
+      const response = await fetch('http://192.168.100.131:3000/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nombre,
+          dni,
+          telefono,
+          password
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // CORRECCIÓN AQUÍ: Verificamos si NestJS nos envió un arreglo de errores
+        const errorMessage = Array.isArray(data.message) 
+          ? data.message.join('\n') // Si es una lista, unimos los mensajes con un salto de línea
+          : (data.message || 'Hubo un problema al crear la cuenta.');
+          
+        Alert.alert('Error de Registro', errorMessage);
+        setIsLoading(false);
+        return;
+      }
+
+      // Éxito: el servidor guardó al usuario
+      Alert.alert('Registro Exitoso', 'Tu cuenta ha sido creada. Ahora puedes iniciar sesión.', [
+        { text: 'ACEPTAR', onPress: () => navigation.goBack() }
+      ]);
+
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error de Conexión', 'No pudimos conectarnos con el servidor. Verifica tu conexión a internet.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -72,7 +112,7 @@ export default function RegisterScreen({ navigation }: any) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} disabled={isLoading}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
 
@@ -86,36 +126,40 @@ export default function RegisterScreen({ navigation }: any) {
           <Text style={styles.label}>Nombre Completo</Text>
           <View style={[styles.inputContainer, errores.nombre ? styles.inputErrorBorder : null, { marginBottom: errores.nombre ? 4 : 20 }]}>
             <Ionicons name="person-outline" size={20} color={errores.nombre ? "#E63946" : "#666"} style={styles.icon} />
-            <TextInput style={styles.input} placeholder="Ej: Juan Pérez" maxLength={50} value={nombre} onChangeText={handleNombreChange} />
+            <TextInput style={styles.input} placeholder="Ej: Juan Pérez" maxLength={50} value={nombre} onChangeText={handleNombreChange} editable={!isLoading} />
           </View>
           {errores.nombre ? <Text style={styles.errorText}>{errores.nombre}</Text> : null}
 
           <Text style={styles.label}>DNI (Sin puntos)</Text>
           <View style={[styles.inputContainer, errores.dni ? styles.inputErrorBorder : null, { marginBottom: errores.dni ? 4 : 20 }]}>
             <Ionicons name="card-outline" size={20} color={errores.dni ? "#E63946" : "#666"} style={styles.icon} />
-            <TextInput style={styles.input} placeholder="Ej: 35123456" keyboardType="numeric" maxLength={8} value={dni} onChangeText={handleDniChange} />
+            <TextInput style={styles.input} placeholder="Ej: 35123456" keyboardType="numeric" maxLength={8} value={dni} onChangeText={handleDniChange} editable={!isLoading} />
           </View>
           {errores.dni ? <Text style={styles.errorText}>{errores.dni}</Text> : null}
 
           <Text style={styles.label}>Teléfono Móvil (Sin guiones)</Text>
           <View style={[styles.inputContainer, errores.telefono ? styles.inputErrorBorder : null, { marginBottom: errores.telefono ? 4 : 20 }]}>
             <Ionicons name="call-outline" size={20} color={errores.telefono ? "#E63946" : "#666"} style={styles.icon} />
-            <TextInput style={styles.input} placeholder="Ej: 3811234567" keyboardType="numeric" maxLength={15} value={telefono} onChangeText={handleTelefonoChange} />
+            <TextInput style={styles.input} placeholder="Ej: 3811234567" keyboardType="numeric" maxLength={15} value={telefono} onChangeText={handleTelefonoChange} editable={!isLoading} />
           </View>
           {errores.telefono ? <Text style={styles.errorText}>{errores.telefono}</Text> : null}
 
           <Text style={styles.label}>Contraseña</Text>
           <View style={[styles.inputContainer, errores.password ? styles.inputErrorBorder : null, { marginBottom: errores.password ? 4 : 20 }]}>
             <Ionicons name="lock-closed-outline" size={20} color={errores.password ? "#E63946" : "#666"} style={styles.icon} />
-            <TextInput style={styles.input} placeholder="Mínimo 6 caracteres" secureTextEntry={!showPassword} maxLength={30} value={password} onChangeText={handlePasswordChange} />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+            <TextInput style={styles.input} placeholder="Mínimo 6 caracteres" secureTextEntry={!showPassword} maxLength={30} value={password} onChangeText={handlePasswordChange} editable={!isLoading} />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon} disabled={isLoading}>
               <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#666" />
             </TouchableOpacity>
           </View>
           {errores.password ? <Text style={styles.errorText}>{errores.password}</Text> : null}
 
-          <TouchableOpacity style={styles.registerBtn} onPress={handleRegister}>
-            <Text style={styles.registerText}>CREAR MI CUENTA</Text>
+          <TouchableOpacity 
+            style={[styles.registerBtn, isLoading && { backgroundColor: '#666' }]} 
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            <Text style={styles.registerText}>{isLoading ? "CREANDO..." : "CREAR MI CUENTA"}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
