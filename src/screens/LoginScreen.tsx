@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ScrollView, Keyboard 
+  KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ navigation }: any) {
   const [dni, setDni] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [dniError, setDniError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -24,10 +26,8 @@ export default function LoginScreen({ navigation }: any) {
     if (passwordError) setPasswordError(''); 
   };
 
-  const handleLogin = () => {
-    // 1. Ocultar el teclado nativo inmediatamente al presionar el botón
+  const handleLogin = async () => {
     Keyboard.dismiss();
-
     let isValid = true;
     setDniError('');
     setPasswordError('');
@@ -47,8 +47,41 @@ export default function LoginScreen({ navigation }: any) {
 
     if (!isValid) return; 
 
-    // 2. Ingreso directo a la aplicación sin carteles emergentes
-    navigation.navigate('MainTabs');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://192.168.100.131:3000/users/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dni, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(
+          'Error de Autenticación', 
+          Array.isArray(data.message) ? data.message.join('\n') : (data.message || 'Credenciales incorrectas')
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // Guardar el Token JWT y los datos del ciudadano en la memoria del teléfono
+      await AsyncStorage.setItem('userToken', data.access_token);
+      await AsyncStorage.setItem('userData', JSON.stringify(data.user));
+
+      // Redirección directa al mapa sin posibilidad de volver atrás con el botón nativo
+      navigation.replace('MainTabs');
+
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error de Conexión', 'No pudimos conectarnos con el servidor. Verifica tu red.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -77,6 +110,7 @@ export default function LoginScreen({ navigation }: any) {
               maxLength={8}
               value={dni}
               onChangeText={handleDniChange}
+              editable={!isLoading}
             />
           </View>
           {dniError ? <Text style={styles.errorText}>{dniError}</Text> : null}
@@ -89,18 +123,27 @@ export default function LoginScreen({ navigation }: any) {
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={handlePasswordChange}
+              editable={!isLoading}
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon} disabled={isLoading}>
               <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#666" />
             </TouchableOpacity>
           </View>
           {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-          <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
-            <Text style={styles.loginText}>INGRESAR</Text>
+          <TouchableOpacity 
+            style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]} 
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginText}>INGRESAR</Text>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.registerLink} onPress={() => navigation.navigate('Register')}>
+          <TouchableOpacity style={styles.registerLink} onPress={() => navigation.navigate('Register')} disabled={isLoading}>
             <Text style={styles.registerText}>¿No tienes cuenta? <Text style={styles.registerTextBold}>Regístrate aquí</Text></Text>
           </TouchableOpacity>
         </View>
@@ -123,6 +166,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, color: '#333' },
   eyeIcon: { padding: 5 },
   loginBtn: { backgroundColor: '#E63946', borderRadius: 10, height: 55, alignItems: 'center', justifyContent: 'center', marginTop: 10, shadowColor: '#E63946', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
+  loginBtnDisabled: { backgroundColor: '#e57373', shadowOpacity: 0 },
   loginText: { color: '#fff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
   registerLink: { marginTop: 20, alignItems: 'center' },
   registerText: { color: '#666', fontSize: 14 },
