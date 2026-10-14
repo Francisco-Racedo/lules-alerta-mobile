@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TextInput, StyleSheet, TouchableOpacity, 
-  Alert, ActivityIndicator, Keyboard 
+  Alert, ActivityIndicator, Keyboard, Image 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 export default function EditProfileScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState('');
   
+  const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
@@ -29,6 +32,7 @@ export default function EditProfileScreen({ navigation }: any) {
         if (storedData) {
           const user = JSON.parse(storedData);
           setUserId(user.id || '');
+          setFotoPerfil(user.fotoPerfil || null);
           setNombre(user.nombre || '');
           setTelefono(user.telefono || '');
           setEmail(user.email || '');
@@ -45,7 +49,15 @@ export default function EditProfileScreen({ navigation }: any) {
     loadData();
   }, []);
 
-  // FILTROS ESTRICTOS: Eliminan caracteres invisibles y espacios que causaban el recorte visual
+  // --- FILTROS DE VALIDACIÓN EN TIEMPO REAL ---
+  const handleNombreChange = (text: string) => {
+    setNombre(text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, ''));
+  };
+
+  const handleContactoNombreChange = (text: string) => {
+    setContactoEmergenciaNombre(text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, ''));
+  };
+
   const handleTelefonoChange = (text: string) => {
     setTelefono(text.replace(/[^0-9]/g, ''));
   };
@@ -53,20 +65,62 @@ export default function EditProfileScreen({ navigation }: any) {
   const handleContactoTelefonoChange = (text: string) => {
     setContactoEmergenciaTelefono(text.replace(/[^0-9]/g, ''));
   };
+  // --------------------------------------------
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso Denegado', 'Se requiere acceso a la galería para subir una foto.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], 
+      allowsEditing: true,
+      aspect: [1, 1], 
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setFotoPerfil(result.assets[0].uri);
+    }
+  };
 
   const handleSave = async () => {
     Keyboard.dismiss(); 
 
+    // --- VALIDACIONES DE ENVÍO ---
     if (!nombre.trim() || !telefono || !email.trim() || !direccion.trim() || !barrio.trim()) {
       Alert.alert('Campos Incompletos', 'Por favor completa todos los campos obligatorios.');
       return;
     }
 
+    // Validar formato de correo electrónico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Correo Inválido', 'Por favor ingresa un correo electrónico con un formato válido.');
+      return;
+    }
+
+    // Validar longitud de teléfonos (mínimo 10 dígitos)
+    if (telefono.length < 10) {
+      Alert.alert('Teléfono Inválido', 'Tu número de teléfono debe tener al menos 10 dígitos.');
+      return;
+    }
+
+    // Validar teléfono de emergencia solo si se ingresó algo
+    if (contactoEmergenciaTelefono && contactoEmergenciaTelefono.length < 10) {
+      Alert.alert('Teléfono de Emergencia Inválido', 'El número de emergencia debe tener al menos 10 dígitos.');
+      return;
+    }
+    // -----------------------------
+
     setLoading(true);
     
     try {
-      // AQUÍ DEBES PONER TU IP REAL (Ejemplo: http://192.168.1.15:3000/users/)
-      const API_URL = `http://192.168.100.131:3000/users/${userId}`; 
+      // AQUÍ DEBES PONER TU IP REAL (Ejemplo: http://192.168.1.15:3000)
+      const BASE_URL = 'http://192.168.100.131:3000';
+      const API_URL = `${BASE_URL}/users/${userId}`; 
       
       const response = await fetch(API_URL, {
         method: 'PATCH',
@@ -87,8 +141,28 @@ export default function EditProfileScreen({ navigation }: any) {
         throw new Error('Fallo al actualizar en el servidor');
       }
 
-      // LA SOLUCIÓN DEL DNI: 
-      // Mezclamos cuidadosamente los datos nuevos con los existentes para jamás perder el DNI
+      let finalAvatarUrl = null;
+
+      if (fotoPerfil && fotoPerfil.startsWith('file')) {
+        const filename = fotoPerfil.split('/').pop() || 'avatar.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        const uploadResult = await FileSystem.uploadAsync(`${API_URL}/avatar`, fotoPerfil, {
+          httpMethod: 'PATCH',
+          uploadType: 1 as any, 
+          fieldName: 'file',
+          mimeType: type,
+        });
+
+        if (uploadResult.status >= 200 && uploadResult.status < 300) {
+          const avatarData = JSON.parse(uploadResult.body);
+          finalAvatarUrl = avatarData.fotoPerfil;
+        } else {
+          console.warn('La fotografía no se pudo subir. Status:', uploadResult.status);
+        }
+      }
+
       const storedData = await AsyncStorage.getItem('userData');
       if (storedData) {
         const user = JSON.parse(storedData);
@@ -101,7 +175,8 @@ export default function EditProfileScreen({ navigation }: any) {
           barrio: barrio.trim(), 
           contactoEmergenciaNombre: contactoEmergenciaNombre.trim(), 
           contactoEmergenciaTelefono, 
-          datosMedicos: datosMedicos.trim()
+          datosMedicos: datosMedicos.trim(),
+          fotoPerfil: finalAvatarUrl || user.fotoPerfil
         };
         await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
       }
@@ -116,6 +191,12 @@ export default function EditProfileScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderAvatarSource = () => {
+    if (!fotoPerfil) return undefined; 
+    if (fotoPerfil.startsWith('file')) return { uri: fotoPerfil };
+    return { uri: `http://192.168.100.131:3000${fotoPerfil}` };
   };
 
   return (
@@ -135,38 +216,86 @@ export default function EditProfileScreen({ navigation }: any) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.avatarContainer}>
+          <TouchableOpacity style={styles.avatarButton} onPress={pickImage}>
+            {fotoPerfil ? (
+              <Image source={renderAvatarSource()} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person-circle-outline" size={100} color="#ccc" />
+            )}
+            <View style={styles.editIconBadge}>
+              <Ionicons name="camera" size={18} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.avatarHint}>Toca para cambiar foto</Text>
+        </View>
+
         <Text style={styles.sectionTitle}>Datos Personales (Obligatorios)</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Nombre Completo</Text>
-          <TextInput style={styles.input} value={nombre} onChangeText={setNombre} placeholder="Ej: Luis Racedo" />
+          <TextInput 
+            style={styles.input} 
+            value={nombre} 
+            onChangeText={handleNombreChange} 
+            placeholder="Ej: Luis Racedo" 
+            maxLength={50}
+          />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Teléfono</Text>
-          <TextInput style={styles.input} value={telefono} onChangeText={handleTelefonoChange} placeholder="Ej: 3816265505" keyboardType="phone-pad" maxLength={15} />
+          <TextInput 
+            style={styles.input} 
+            value={telefono} 
+            onChangeText={handleTelefonoChange} 
+            placeholder="Ej: 3816265505" 
+            keyboardType="phone-pad" 
+            maxLength={15} 
+          />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Correo Electrónico</Text>
-          <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="ejemplo@correo.com" keyboardType="email-address" autoCapitalize="none" />
+          <TextInput 
+            style={styles.input} 
+            value={email} 
+            onChangeText={setEmail} 
+            placeholder="ejemplo@correo.com" 
+            keyboardType="email-address" 
+            autoCapitalize="none" 
+            maxLength={100}
+          />
         </View>
 
         <Text style={styles.sectionTitle}>Ubicación (Obligatoria)</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Dirección</Text>
-          <TextInput style={styles.input} value={direccion} onChangeText={setDireccion} placeholder="Calle y Número" />
+          <TextInput style={styles.input} value={direccion} onChangeText={setDireccion} placeholder="Calle y Número" maxLength={200} />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Barrio</Text>
-          <TextInput style={styles.input} value={barrio} onChangeText={setBarrio} placeholder="Ej: Centro" />
+          <TextInput style={styles.input} value={barrio} onChangeText={setBarrio} placeholder="Ej: Centro" maxLength={100} />
         </View>
 
         <Text style={styles.sectionTitle}>Emergencia / Médicos (Opcional)</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Contacto de Emergencia (Nombre)</Text>
-          <TextInput style={styles.input} value={contactoEmergenciaNombre} onChangeText={setContactoEmergenciaNombre} placeholder="Ej: María (Madre)" />
+          <TextInput 
+            style={styles.input} 
+            value={contactoEmergenciaNombre} 
+            onChangeText={handleContactoNombreChange} 
+            placeholder="Ej: María (Madre)" 
+            maxLength={50}
+          />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Contacto de Emergencia (Teléfono)</Text>
-          <TextInput style={styles.input} value={contactoEmergenciaTelefono} onChangeText={handleContactoTelefonoChange} placeholder="Teléfono del contacto" keyboardType="phone-pad" maxLength={15} />
+          <TextInput 
+            style={styles.input} 
+            value={contactoEmergenciaTelefono} 
+            onChangeText={handleContactoTelefonoChange} 
+            placeholder="Teléfono del contacto" 
+            keyboardType="phone-pad" 
+            maxLength={15} 
+          />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Datos Médicos Relevantes</Text>
@@ -203,6 +332,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   spacer: { width: 34 },
   scrollContent: { padding: 20, paddingBottom: 40, flexGrow: 1 },
+  avatarContainer: { alignItems: 'center', marginBottom: 20, marginTop: 10 },
+  avatarButton: { position: 'relative', width: 100, height: 100, borderRadius: 50, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  avatarImage: { width: 100, height: 100, borderRadius: 50 },
+  editIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#E63946', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+  avatarHint: { marginTop: 10, fontSize: 13, color: '#666', fontWeight: '500' },
   sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#E63946', marginTop: 15, marginBottom: 10, textTransform: 'uppercase' },
   inputContainer: { marginBottom: 15 },
   label: { fontSize: 14, color: '#666', marginBottom: 5, fontWeight: '500' },
