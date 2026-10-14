@@ -4,6 +4,7 @@
     "slug": "mobile",
     "version": "1.0.0",
     "android": {
+      "softwareKeyboardLayoutMode": "pan",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDl_gYlW2aKNJ_jqNob0k3aYl4uB8Gw8HQ"

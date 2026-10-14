@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import HomeScreen from '../screens/HomeScreen';
 import ReportFormScreen from '../screens/ReportFormScreen';
-// Importamos las nuevas pantallas de seguridad
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+// 1. Nueva importación agregada
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -57,17 +60,44 @@ function TabNavigator() {
       <Tab.Screen name="Avisos">
         {() => <PlaceholderScreen title="Muro de Avisos Oficiales" />}
       </Tab.Screen>
-      <Tab.Screen name="Perfil">
-        {() => <PlaceholderScreen title="Configuración de Cuenta" />}
-      </Tab.Screen>
+      <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
 
 export default function AppNavigator() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialRoute, setInitialRoute] = useState('Login');
+
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        const userToken = await AsyncStorage.getItem('userToken');
+        if (userToken) {
+          // Si el token existe, cambiamos la ruta inicial directamente al mapa
+          setInitialRoute('MainTabs');
+        }
+      } catch (error) {
+        console.error('Error leyendo el token de sesión:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkLoginStatus();
+  }, []);
+
+  // Pantalla de carga mientras se verifica la memoria del dispositivo
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8f9fa' }}>
+        <ActivityIndicator size="large" color="#E63946" />
+      </View>
+    );
+  }
+
   return (
-    // Definimos Login como la puerta de entrada principal
-    <Stack.Navigator initialRouteName="Login">
+    <Stack.Navigator initialRouteName={initialRoute}>
       
       {/* 1. Flujo de Autenticación */}
       <Stack.Screen 
@@ -98,6 +128,13 @@ export default function AppNavigator() {
           headerTintColor: '#fff',
           presentation: 'modal'
         }} 
+      />
+      
+      {/* 2. Nueva pantalla de edición de perfil registrada */}
+      <Stack.Screen 
+        name="EditProfile" 
+        component={EditProfileScreen} 
+        options={{ headerShown: false }} 
       />
     </Stack.Navigator>
   );
