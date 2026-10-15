@@ -7,17 +7,17 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export default function ReportFormScreen({ route, navigation }: any) {
   const { category, location } = route.params || {};
-  
   const insets = useSafeAreaInsets();
-  
   const [address, setAddress] = useState<string | null>(null);
   const [loadingAddress, setLoadingAddress] = useState<boolean>(true);
-  
   const [description, setDescription] = useState<string>('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -25,7 +25,6 @@ export default function ReportFormScreen({ route, navigation }: any) {
         <TouchableOpacity
           onPress={() => {
             navigation.goBack();
-            // Si volvemos con la flecha, SÍ queremos que se reabra el menú
             setTimeout(() => {
               DeviceEventEmitter.emit('reopenCategoryModal');
             }, 300);
@@ -86,7 +85,7 @@ export default function ReportFormScreen({ route, navigation }: any) {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.5,
+      quality: 0.5, 
     });
     if (!result.canceled) {
       setImageUri(result.assets[0].uri);
@@ -109,23 +108,86 @@ export default function ReportFormScreen({ route, navigation }: any) {
     setImageUri(null);
   };
 
-  const handleSubmit = () => {
+  // --- LÓGICA DE ENVÍO SÚPER OPTIMIZADA ---
+  const handleSubmit = async () => {
     if (!description.trim() && !imageUri) {
       Alert.alert("Atención", "Por favor, agrega una descripción o una foto de la incidencia.");
       return;
     }
 
-    Alert.alert(
-      "¡Reporte Enviado!",
-      "Tu alerta ha sido registrada y derivada al personal correspondiente.",
-      [{ 
-        text: "Entendido", 
-        onPress: () => {
-          // CORRECCIÓN: Volvemos al mapa limpiamente sin recargarlo y SIN abrir el modal (porque ya terminó)
-          navigation.goBack();
+    setIsSubmitting(true);
+
+    try {
+      const storedData = await AsyncStorage.getItem('userData');
+      if (!storedData) {
+        Alert.alert("Error", "Sesión no encontrada. Por favor inicia sesión nuevamente.");
+        setIsSubmitting(false);
+        return;
+      }
+      const user = JSON.parse(storedData);
+      const BASE_URL = 'http://192.168.100.131:3000'; 
+      
+      const cleanAddress = (address && address !== 'Dirección no encontrada' && address !== 'Error al obtener la dirección') ? address : '';
+
+      if (imageUri) {
+        // ESCENARIO A: Si hay imagen, enviamos TODO el paquete usando FileSystem.uploadAsync
+        const filename = imageUri.split('/').pop() || 'evidencia.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        await FileSystem.uploadAsync(`${BASE_URL}/alerts`, imageUri, {
+          httpMethod: 'POST',
+          uploadType: 1 as any, // MULTIPART
+          fieldName: 'file',
+          mimeType: type,
+          // Pasamos el resto de los datos de la alerta dentro del mismo paquete de la imagen
+          parameters: {
+            category: category,
+            description: description.trim(),
+            latitude: String(location.coords.latitude),
+            longitude: String(location.coords.longitude),
+            userId: user.id,
+            address: cleanAddress,
+          }
+        });
+
+      } else {
+        // ESCENARIO B: Si NO hay imagen, usamos el fetch clásico para enviar solo texto
+        const response = await fetch(`${BASE_URL}/alerts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            category,
+            description: description.trim(),
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            userId: user.id,
+            address: cleanAddress,
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Error al registrar alerta en el servidor');
         }
-      }]
-    );
+      }
+
+      Alert.alert(
+        "¡Reporte Enviado!",
+        "Tu alerta ha sido registrada y derivada al personal correspondiente.",
+        [{ 
+          text: "Entendido", 
+          onPress: () => {
+            navigation.goBack();
+          }
+        }]
+      );
+
+    } catch (error) {
+      console.error('Error enviando reporte:', error);
+      Alert.alert("Error de Conexión", "No pudimos enviar tu reporte. Revisa tu conexión a internet.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -161,27 +223,38 @@ export default function ReportFormScreen({ route, navigation }: any) {
           textAlignVertical="top"
           value={description}
           onChangeText={setDescription}
+          editable={!isSubmitting}
         />
 
         <Text style={styles.sectionLabel}>Evidencia Fotográfica:</Text>
         {imageUri ? (
           <View style={styles.imagePreviewContainer}>
             <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-            <TouchableOpacity style={styles.removeImageBtn} onPress={removePhoto}>
+            <TouchableOpacity style={styles.removeImageBtn} onPress={removePhoto} disabled={isSubmitting}>
               <Ionicons name="trash" size={20} color="white" />
               <Text style={styles.removeImageText}>Quitar Foto</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity style={styles.addPhotoBtn} onPress={handleAddPhoto}>
+          <TouchableOpacity style={styles.addPhotoBtn} onPress={handleAddPhoto} disabled={isSubmitting}>
             <Ionicons name="camera" size={32} color="#E63946" />
             <Text style={styles.addPhotoText}>Añadir foto de lo ocurrido</Text>
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-          <Text style={styles.submitBtnText}>ENVIAR REPORTE</Text>
-          <Ionicons name="send" size={20} color="white" style={{ marginLeft: 10 }} />
+        <TouchableOpacity 
+          style={[styles.submitBtn, isSubmitting && { backgroundColor: '#666' }]} 
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.submitBtnText}>ENVIAR REPORTE</Text>
+              <Ionicons name="send" size={20} color="white" style={{ marginLeft: 10 }} />
+            </>
+          )}
         </TouchableOpacity>
 
         <View style={{ height: insets.bottom + 40 }} />
