@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 export default function MyReportsScreen() {
+  const insets = useSafeAreaInsets();
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -100,7 +101,7 @@ export default function MyReportsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mis Reportes</Text>
         <Text style={styles.headerSubtitle}>Historial de incidencias enviadas</Text>
@@ -112,7 +113,7 @@ export default function MyReportsScreen() {
         </View>
       ) : alerts.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="document-text-outline" size5={60} color="#ccc" />
+          <Ionicons name="document-text-outline" size={60} color="#ccc" />
           <Text style={styles.emptyText}>No has enviado ningún reporte aún.</Text>
         </View>
       ) : (
@@ -120,7 +121,7 @@ export default function MyReportsScreen() {
           data={alerts}
           keyExtractor={(item) => item.id}
           renderItem={renderAlertCard}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: '#666', marginTop: 5 },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   emptyText: { fontSize: 16, color: '#666', marginTop: 15, textAlign: 'center' },
-  listContainer: { padding: 15, paddingBottom: 30 },
+  listContainer: { padding: 15 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   categoryBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffe6e6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },

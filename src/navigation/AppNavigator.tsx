@@ -14,6 +14,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 // 1. Nueva importación agregada
 import EditProfileScreen from '../screens/EditProfileScreen';
 import MyReportsScreen from '../screens/MyReportsScreen';
+import NoticesScreen from '../screens/NoticesScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -56,9 +57,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="Mapa" component={HomeScreen} />
       <Tab.Screen name="Mis Reportes" component={MyReportsScreen} />
-      <Tab.Screen name="Avisos">
-        {() => <PlaceholderScreen title="Muro de Avisos Oficiales" />}
-      </Tab.Screen>
+      <Tab.Screen name="Avisos" component={NoticesScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );

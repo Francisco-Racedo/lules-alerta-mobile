@@ -4,10 +4,13 @@ import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
-export default function HomeScreen({ navigation }: any) {
+export default function HomeScreen({ route, navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  // Recibimos parámetros externos si el usuario presionó "Ver en Mapa" desde un aviso
+  const focusLocation = route.params?.focusLocation;
 
   // NUEVO: Escuchamos la señal de radio silenciosa para abrir el modal sin recargar
   useEffect(() => {
@@ -15,7 +18,6 @@ export default function HomeScreen({ navigation }: any) {
       setModalVisible(true);
     });
     
-    // Limpiamos el escuchador si la pantalla se destruye
     return () => {
       subscription.remove();
     };
@@ -23,6 +25,7 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     (async () => {
+      // Si ya nos pasaron una ubicación objetivo desde los avisos, podemos usarla temporalmente para no forzar el GPS si tarda
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Permiso de ubicación denegado.');
@@ -57,8 +60,16 @@ export default function HomeScreen({ navigation }: any) {
     }, 250);
   };
 
+  // Generamos el HTML del mapa adaptándose si hay un punto a destacar o solo la posición actual
   const mapHtml = useMemo(() => {
     if (!location) return '';
+
+    // Si recibimos un focusLocation (desde Avisos), centramos ahí y ponemos un pin rojo especial
+    const targetLat = focusLocation ? focusLocation.latitude : location.coords.latitude;
+    const targetLng = focusLocation ? focusLocation.longitude : location.coords.longitude;
+    const hasFocusPin = !!focusLocation;
+    const pinTitle = focusLocation ? focusLocation.title : 'Mi ubicación actual';
+
     return `
       <!DOCTYPE html>
       <html>
@@ -73,14 +84,16 @@ export default function HomeScreen({ navigation }: any) {
         <div id="map"></div>
         <script>
           function initMap() {
-            var userLocation = { lat: ${location.coords.latitude}, lng: ${location.coords.longitude} };
+            var centerLocation = { lat: ${targetLat}, lng: ${targetLng} };
             var map = new google.maps.Map(document.getElementById('map'), {
-              zoom: 16,
-              center: userLocation,
+              zoom: 17,
+              center: centerLocation,
               disableDefaultUI: true, 
               mapTypeId: 'roadmap'
             });
 
+            // Marcador de la posición actual del usuario (Azul)
+            var userLocation = { lat: ${location.coords.latitude}, lng: ${location.coords.longitude} };
             new google.maps.Marker({
               position: userLocation,
               map: map,
@@ -93,13 +106,34 @@ export default function HomeScreen({ navigation }: any) {
                 strokeWeight: 2
               }
             });
+
+            // Si viene un punto enfocado desde los avisos, dibujamos un marcador rojo destacado
+            if (${hasFocusPin}) {
+              var focusMarker = new google.maps.Marker({
+                position: centerLocation,
+                map: map,
+                title: "${pinTitle}",
+                animation: google.maps.Animation.DROP
+              });
+
+              var infoWindow = new google.maps.InfoWindow({
+                content: "<div style='font-family: sans-serif; padding: 5px;'><b style='color: #E63946;'>${focusLocation?.title}</b><p style='margin: 5px 0 0 0; font-size: 12px;'>${focusLocation?.address || 'Ubicación del incidente'}</p></div>"
+              });
+
+              focusMarker.addListener('click', function() {
+                infoWindow.open(map, focusMarker);
+              });
+              
+              // Abrir la ventanita de información automáticamente
+              infoWindow.open(map, focusMarker);
+            }
           }
         </script>
         <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDl_gYlW2aKNJ_jqNob0k3aYl4uB8Gw8HQ&callback=initMap"></script>
       </body>
       </html>
     `;
-  }, [location]);
+  }, [location, focusLocation]);
 
   if (!location) {
     return (
@@ -196,7 +230,8 @@ export default function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  map: { flex: 1 },
+  // CORRECCIÓN: Quitamos el marginBottom para que el mapa ocupe toda la pantalla de forma fluida
+  map: { flex: 1 }, 
   bottomContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center', justifyContent: 'center' },
   sosButton: { backgroundColor: '#D90429', width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', shadowColor: '#D90429', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 10, borderWidth: 4, borderColor: 'rgba(255, 255, 255, 0.4)' },
   sosText: { color: 'white', fontWeight: '900', fontSize: 22, marginTop: 2, letterSpacing: 1 },
