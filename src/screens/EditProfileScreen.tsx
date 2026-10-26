@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import Toast from 'react-native-toast-message';
 
 export default function EditProfileScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -24,6 +25,9 @@ export default function EditProfileScreen({ navigation }: any) {
   const [contactoEmergenciaNombre, setContactoEmergenciaNombre] = useState('');
   const [contactoEmergenciaTelefono, setContactoEmergenciaTelefono] = useState('');
   const [datosMedicos, setDatosMedicos] = useState('');
+
+  // Variable de estado para rastrear el input activo movida al nivel superior
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -91,26 +95,26 @@ export default function EditProfileScreen({ navigation }: any) {
 
     // --- VALIDACIONES DE ENVÍO ---
     if (!nombre.trim() || !telefono || !email.trim() || !direccion.trim() || !barrio.trim()) {
-      Alert.alert('Campos Incompletos', 'Por favor completa todos los campos obligatorios.');
+      Toast.show({ type: 'error', text1: 'Campos Incompletos', text2: 'Por favor completa todos los campos obligatorios.', position: 'top' });
       return;
     }
 
     // Validar formato de correo electrónico
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('Correo Inválido', 'Por favor ingresa un correo electrónico con un formato válido.');
+      Toast.show({ type: 'error', text1: 'Correo Inválido', text2: 'Por favor ingresa un correo electrónico válido.', position: 'top' });
       return;
     }
 
     // Validar longitud de teléfonos (mínimo 10 dígitos)
     if (telefono.length < 10) {
-      Alert.alert('Teléfono Inválido', 'Tu número de teléfono debe tener al menos 10 dígitos.');
+      Toast.show({ type: 'error', text1: 'Teléfono Inválido', text2: 'Tu número de teléfono debe tener al menos 10 dígitos.', position: 'top' });
       return;
     }
 
     // Validar teléfono de emergencia solo si se ingresó algo
     if (contactoEmergenciaTelefono && contactoEmergenciaTelefono.length < 10) {
-      Alert.alert('Teléfono de Emergencia Inválido', 'El número de emergencia debe tener al menos 10 dígitos.');
+      Toast.show({ type: 'error', text1: 'Teléfono de Emergencia', text2: 'El número debe tener al menos 10 dígitos.', position: 'top' });
       return;
     }
     // -----------------------------
@@ -118,7 +122,6 @@ export default function EditProfileScreen({ navigation }: any) {
     setLoading(true);
     
     try {
-      // AQUÍ DEBES PONER TU IP REAL (Ejemplo: http://192.168.1.15:3000)
       const BASE_URL = 'http://192.168.100.131:3000';
       const API_URL = `${BASE_URL}/users/${userId}`; 
       
@@ -181,12 +184,22 @@ export default function EditProfileScreen({ navigation }: any) {
         await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
       }
 
-      Alert.alert('¡Éxito!', 'Tu perfil ha sido actualizado correctamente.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: '¡Éxito!',
+        text2: 'Tu perfil ha sido actualizado correctamente.',
+        position: 'top'
+      });
+      
+      setTimeout(() => navigation.goBack(), 1500);
 
     } catch (error) {
-      Alert.alert('Error', 'Hubo un problema al conectar con el servidor.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error de Conexión',
+        text2: 'Hubo un problema al conectar con el servidor.',
+        position: 'top'
+      });
       console.error(error);
     } finally {
       setLoading(false);
@@ -234,78 +247,106 @@ export default function EditProfileScreen({ navigation }: any) {
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Nombre Completo</Text>
           <TextInput 
-            style={styles.input} 
+            style={[styles.input, focusedInput === 'nombre' && styles.inputFocused]} 
             value={nombre} 
             onChangeText={handleNombreChange} 
             placeholder="Ej: Luis Racedo" 
             maxLength={50}
+            onFocus={() => setFocusedInput('nombre')}
+            onBlur={() => setFocusedInput(null)}
           />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Teléfono</Text>
           <TextInput 
-            style={styles.input} 
+            style={[styles.input, focusedInput === 'telefono' && styles.inputFocused]} 
             value={telefono} 
             onChangeText={handleTelefonoChange} 
             placeholder="Ej: 3816265505" 
             keyboardType="phone-pad" 
             maxLength={15} 
+            onFocus={() => setFocusedInput('telefono')}
+            onBlur={() => setFocusedInput(null)}
           />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Correo Electrónico</Text>
           <TextInput 
-            style={styles.input} 
+            style={[styles.input, focusedInput === 'email' && styles.inputFocused]} 
             value={email} 
             onChangeText={setEmail} 
             placeholder="ejemplo@correo.com" 
             keyboardType="email-address" 
             autoCapitalize="none" 
             maxLength={100}
+            onFocus={() => setFocusedInput('email')}
+            onBlur={() => setFocusedInput(null)}
           />
         </View>
 
         <Text style={styles.sectionTitle}>Ubicación (Obligatoria)</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Dirección</Text>
-          <TextInput style={styles.input} value={direccion} onChangeText={setDireccion} placeholder="Calle y Número" maxLength={200} />
+          <TextInput 
+            style={[styles.input, focusedInput === 'direccion' && styles.inputFocused]} 
+            value={direccion} 
+            onChangeText={setDireccion} 
+            placeholder="Calle y Número" 
+            maxLength={200} 
+            onFocus={() => setFocusedInput('direccion')}
+            onBlur={() => setFocusedInput(null)}
+          />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Barrio</Text>
-          <TextInput style={styles.input} value={barrio} onChangeText={setBarrio} placeholder="Ej: Centro" maxLength={100} />
+          <TextInput 
+            style={[styles.input, focusedInput === 'barrio' && styles.inputFocused]} 
+            value={barrio} 
+            onChangeText={setBarrio} 
+            placeholder="Ej: Centro" 
+            maxLength={100} 
+            onFocus={() => setFocusedInput('barrio')}
+            onBlur={() => setFocusedInput(null)}
+          />
         </View>
 
         <Text style={styles.sectionTitle}>Emergencia / Médicos (Opcional)</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Contacto de Emergencia (Nombre)</Text>
           <TextInput 
-            style={styles.input} 
+            style={[styles.input, focusedInput === 'contactoEmergenciaNombre' && styles.inputFocused]} 
             value={contactoEmergenciaNombre} 
             onChangeText={handleContactoNombreChange} 
             placeholder="Ej: María (Madre)" 
             maxLength={50}
+            onFocus={() => setFocusedInput('contactoEmergenciaNombre')}
+            onBlur={() => setFocusedInput(null)}
           />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Contacto de Emergencia (Teléfono)</Text>
           <TextInput 
-            style={styles.input} 
+            style={[styles.input, focusedInput === 'contactoEmergenciaTelefono' && styles.inputFocused]} 
             value={contactoEmergenciaTelefono} 
             onChangeText={handleContactoTelefonoChange} 
             placeholder="Teléfono del contacto" 
             keyboardType="phone-pad" 
             maxLength={15} 
+            onFocus={() => setFocusedInput('contactoEmergenciaTelefono')}
+            onBlur={() => setFocusedInput(null)}
           />
         </View>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Datos Médicos Relevantes</Text>
           <TextInput 
-            style={[styles.input, styles.textArea]} 
+            style={[styles.input, styles.textArea, focusedInput === 'datosMedicos' && styles.inputFocused]} 
             value={datosMedicos} 
             onChangeText={setDatosMedicos} 
             placeholder="Alergias, tipo de sangre, enfermedades crónicas..." 
             multiline 
             numberOfLines={3} 
+            onFocus={() => setFocusedInput('datosMedicos')}
+            onBlur={() => setFocusedInput(null)}
           />
         </View>
 
@@ -341,6 +382,11 @@ const styles = StyleSheet.create({
   inputContainer: { marginBottom: 15 },
   label: { fontSize: 14, color: '#666', marginBottom: 5, fontWeight: '500' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 15, height: 50, fontSize: 16, color: '#333' },
+  inputFocused: { 
+    borderColor: '#E63946', 
+    borderWidth: 2,
+    backgroundColor: '#fffafa'
+  },
   textArea: { height: 80, textAlignVertical: 'top', paddingTop: 10 },
   saveButton: { backgroundColor: '#E63946', borderRadius: 10, height: 55, justifyContent: 'center', marginTop: 20, elevation: 2, shadowColor: '#E63946', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   saveButtonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },

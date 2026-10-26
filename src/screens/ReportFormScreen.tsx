@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+import Toast from 'react-native-toast-message';
 
 export default function ReportFormScreen({ route, navigation }: any) {
   const { category, location } = route.params || {};
@@ -18,6 +19,9 @@ export default function ReportFormScreen({ route, navigation }: any) {
   const [description, setDescription] = useState<string>('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  
+  // Estado para rastrear si la caja de texto está activa
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -111,7 +115,7 @@ export default function ReportFormScreen({ route, navigation }: any) {
   // --- LÓGICA DE ENVÍO SÚPER OPTIMIZADA ---
   const handleSubmit = async () => {
     if (!description.trim() && !imageUri) {
-      Alert.alert("Atención", "Por favor, agrega una descripción o una foto de la incidencia.");
+      Toast.show({ type: 'error', text1: 'Atención', text2: 'Agrega una descripción o una foto de la incidencia.', position: 'top' });
       return;
     }
 
@@ -120,7 +124,7 @@ export default function ReportFormScreen({ route, navigation }: any) {
     try {
       const storedData = await AsyncStorage.getItem('userData');
       if (!storedData) {
-        Alert.alert("Error", "Sesión no encontrada. Por favor inicia sesión nuevamente.");
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Sesión no encontrada. Por favor inicia sesión nuevamente.', position: 'top' });
         setIsSubmitting(false);
         return;
       }
@@ -130,17 +134,15 @@ export default function ReportFormScreen({ route, navigation }: any) {
       const cleanAddress = (address && address !== 'Dirección no encontrada' && address !== 'Error al obtener la dirección') ? address : '';
 
       if (imageUri) {
-        // ESCENARIO A: Si hay imagen, enviamos TODO el paquete usando FileSystem.uploadAsync
         const filename = imageUri.split('/').pop() || 'evidencia.jpg';
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : `image/jpeg`;
 
         await FileSystem.uploadAsync(`${BASE_URL}/alerts`, imageUri, {
           httpMethod: 'POST',
-          uploadType: 1 as any, // MULTIPART
+          uploadType: 1 as any, 
           fieldName: 'file',
           mimeType: type,
-          // Pasamos el resto de los datos de la alerta dentro del mismo paquete de la imagen
           parameters: {
             category: category,
             description: description.trim(),
@@ -152,7 +154,6 @@ export default function ReportFormScreen({ route, navigation }: any) {
         });
 
       } else {
-        // ESCENARIO B: Si NO hay imagen, usamos el fetch clásico para enviar solo texto
         const response = await fetch(`${BASE_URL}/alerts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -171,20 +172,25 @@ export default function ReportFormScreen({ route, navigation }: any) {
         }
       }
 
-      Alert.alert(
-        "¡Reporte Enviado!",
-        "Tu alerta ha sido registrada y derivada al personal correspondiente.",
-        [{ 
-          text: "Entendido", 
-          onPress: () => {
-            navigation.goBack();
-          }
-        }]
-      );
+      Toast.show({
+        type: 'success',
+        text1: '¡Reporte Enviado!',
+        text2: 'Tu alerta ha sido registrada y derivada.',
+        position: 'top'
+      });
+      
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1500);
 
     } catch (error) {
       console.error('Error enviando reporte:', error);
-      Alert.alert("Error de Conexión", "No pudimos enviar tu reporte. Revisa tu conexión a internet.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error de Conexión',
+        text2: 'No pudimos enviar tu reporte. Revisa tu internet.',
+        position: 'top'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -216,7 +222,7 @@ export default function ReportFormScreen({ route, navigation }: any) {
 
         <Text style={styles.sectionLabel}>Descripción del suceso:</Text>
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, focusedInput === 'description' && styles.inputFocused]}
           placeholder="Escribe detalles importantes aquí..."
           multiline={true}
           numberOfLines={4}
@@ -224,6 +230,8 @@ export default function ReportFormScreen({ route, navigation }: any) {
           value={description}
           onChangeText={setDescription}
           editable={!isSubmitting}
+          onFocus={() => setFocusedInput('description')}
+          onBlur={() => setFocusedInput(null)}
         />
 
         <Text style={styles.sectionLabel}>Evidencia Fotográfica:</Text>
@@ -275,6 +283,7 @@ const styles = StyleSheet.create({
   coordText: { color: '#888', fontSize: 12, fontFamily: 'monospace' },
   sectionLabel: { fontSize: 16, fontWeight: 'bold', color: '#444', marginBottom: 8 },
   textInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 15, fontSize: 16, minHeight: 120, marginBottom: 25, color: '#333' },
+  inputFocused: { borderColor: '#E63946', borderWidth: 2, backgroundColor: '#fffafa' },
   addPhotoBtn: { backgroundColor: '#fff', borderWidth: 2, borderColor: '#E63946', borderStyle: 'dashed', borderRadius: 10, padding: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 30 },
   addPhotoText: { color: '#E63946', fontWeight: 'bold', marginTop: 10, fontSize: 16 },
   imagePreviewContainer: { marginBottom: 30, alignItems: 'center' },

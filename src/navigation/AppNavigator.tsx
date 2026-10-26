@@ -15,6 +15,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import MyReportsScreen from '../screens/MyReportsScreen';
 import NoticesScreen from '../screens/NoticesScreen';
+import DetalleReporteScreen from '../screens/DetalleReporteScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -132,6 +133,11 @@ export default function AppNavigator() {
       <Stack.Screen 
         name="EditProfile" 
         component={EditProfileScreen} 
+        options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="DetalleReporte" 
+        component={DetalleReporteScreen} 
         options={{ headerShown: false }} 
       />
     </Stack.Navigator>

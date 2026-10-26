@@ -10,6 +10,9 @@
           "apiKey": "AIzaSyDl_gYlW2aKNJ_jqNob0k3aYl4uB8Gw8HQ"
         }
       }
-    }
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
   }
 }

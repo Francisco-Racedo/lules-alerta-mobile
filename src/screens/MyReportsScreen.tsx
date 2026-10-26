@@ -1,59 +1,92 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Image, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-export default function MyReportsScreen() {
+export default function MyReportsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState('TODOS');
 
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchMyAlerts();
-    }, [])
-  );
+  // Estados de paginación
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const fetchMyAlerts = async () => {
+  const BASE_URL = 'http://192.168.100.131:3000';
+
+  const fetchMyAlerts = async (pageNumber: number = 1, isRefresh: boolean = false) => {
     try {
-      setLoading(true);
       const storedData = await AsyncStorage.getItem('userData');
       if (!storedData) return;
       
       const user = JSON.parse(storedData);
+      const response = await fetch(`${BASE_URL}/alerts/user/${user.id}?page=${pageNumber}&limit=5`);
       
-      // ⚠️ REEMPLAZA ESTA IP POR LA TUYA REAL (ej. 192.168.100.131)
-      const BASE_URL = 'http://192.168.100.131:3000'; 
-      const response = await fetch(`${BASE_URL}/alerts/user/${user.id}`);
+      // Retraso artificial para simular latencia de red y visualizar el paginado
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
       
       if (response.ok) {
-        const data = await response.json();
-        setAlerts(data);
+        const result = await response.json();
+        
+        if (isRefresh || pageNumber === 1) {
+          setAlerts(result.data);
+        } else {
+          setAlerts(prev => [...prev, ...result.data]);
+        }
+        
+        setHasMore(pageNumber < result.lastPage);
+        setPage(pageNumber);
       }
     } catch (error) {
       console.error('Error obteniendo reportes:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchMyAlerts(1, true);
+    }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchMyAlerts(1, true);
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore && !loading) {
+      setLoadingMore(true);
+      fetchMyAlerts(page + 1, false);
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PENDING': return '#F4A261'; 
-      case 'IN_PROGRESS': return '#2A9D8F'; 
-      case 'RESOLVED': return '#264653'; 
-      default: return '#666';
+      case 'PENDING': return '#F4A261'; // Naranja
+      case 'IN_PROGRESS': return '#2A9D8F'; // Verde agua
+      case 'RESOLVED': return '#264653'; // Azul oscuro
+      case 'DISMISSED': return '#E63946'; // Rojo
+      default: return '#666'; // Gris por defecto
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'PENDING': return 'Pendiente';
-      case 'IN_PROGRESS': return 'En Curso';
-      case 'RESOLVED': return 'Resuelto';
-      default: return status;
+      case 'PENDING': return 'PENDIENTE';
+      case 'IN_PROGRESS': return 'EN CURSO';
+      case 'RESOLVED': return 'RESUELTO';
+      case 'DISMISSED': return 'DESCARTADO';
+      default: return status.toUpperCase();
     }
   };
 
@@ -65,8 +98,14 @@ export default function MyReportsScreen() {
     return new Date(dateString).toLocaleDateString('es-ES', options);
   };
 
+  const filteredAlerts = alerts.filter(item => filter === 'TODOS' ? true : item.status === filter);
+
   const renderAlertCard = ({ item }: { item: any }) => (
-    <View style={styles.card}>
+    <TouchableOpacity 
+      style={styles.card} 
+      activeOpacity={0.9} 
+      onPress={() => navigation.navigate('DetalleReporte', { report: item })}
+    >
       <View style={styles.cardHeader}>
         <View style={styles.categoryBadge}>
           <Ionicons name="warning" size={16} color="#E63946" />
@@ -91,14 +130,19 @@ export default function MyReportsScreen() {
       ) : null}
 
       {item.imageUrl && (
-        <Image 
-          // ⚠️ CORRECCIÓN DE LA FOTO: Apuntamos directamente al servidor estático de NestJS con la IP real
-          source={{ uri: `http://192.168.100.131:3000${item.imageUrl}` }} 
-          style={styles.alertImage} 
-        />
+        <Image source={{ uri: `${BASE_URL}${item.imageUrl}` }} style={styles.alertImage} />
       )}
-    </View>
+    </TouchableOpacity>
   );
+
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={{ paddingVertical: 20 }}>
+        <ActivityIndicator size="small" color="#E63946" />
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -107,22 +151,42 @@ export default function MyReportsScreen() {
         <Text style={styles.headerSubtitle}>Historial de incidencias enviadas</Text>
       </View>
 
-      {loading ? (
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 15 }}>
+          {['TODOS', 'PENDING', 'IN_PROGRESS', 'RESOLVED', 'DISMISSED'].map((f) => (
+            <TouchableOpacity 
+              key={f} 
+              style={[styles.filterChip, filter === f && styles.filterChipActive]}
+              onPress={() => setFilter(f)}
+            >
+              <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+                {f === 'TODOS' ? 'Todos' : getStatusText(f)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {loading && page === 1 ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#E63946" />
         </View>
-      ) : alerts.length === 0 ? (
+      ) : filteredAlerts.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="document-text-outline" size={60} color="#ccc" />
-          <Text style={styles.emptyText}>No has enviado ningún reporte aún.</Text>
+          <Text style={styles.emptyText}>No hay reportes en esta categoría.</Text>
         </View>
       ) : (
         <FlatList
-          data={alerts}
+          data={filteredAlerts}
           keyExtractor={(item) => item.id}
           renderItem={renderAlertCard}
           contentContainerStyle={[styles.listContainer, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#E63946']} />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={renderFooter}
         />
       )}
     </SafeAreaView>
@@ -131,12 +195,17 @@ export default function MyReportsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { padding: 20, backgroundColor: '#fff', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3 },
+  header: { padding: 20, backgroundColor: '#fff', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, zIndex: 10 },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#333' },
   headerSubtitle: { fontSize: 14, color: '#666', marginTop: 5 },
+  filterContainer: { backgroundColor: '#fff', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f0f0f0', marginRight: 10 },
+  filterChipActive: { backgroundColor: '#333' },
+  filterText: { fontSize: 13, color: '#666', fontWeight: 'bold' },
+  filterTextActive: { color: '#fff' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   emptyText: { fontSize: 16, color: '#666', marginTop: 15, textAlign: 'center' },
-  listContainer: { padding: 15 },
+  listContainer: { padding: 15, paddingTop: 15 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   categoryBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffe6e6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
