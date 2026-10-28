@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator, Linking, Platform, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -19,10 +19,13 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
   const [currentDescription, setCurrentDescription] = useState(report.description || '');
   const [currentImage, setCurrentImage] = useState(report.imageUrl);
 
+  // Estados para la galería en pantalla completa
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+
   const isPending = report.status === 'PENDING';
   const isClosed = report.status === 'RESOLVED' || report.status === 'DISMISSED';
 
-  // Ordenamos el historial del más reciente al más antiguo
   const timelineEvents = Array.isArray(report.history) 
     ? [...report.history].sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
     : [];
@@ -84,12 +87,43 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
     };
   }
 
+  const handleOpenMaps = () => {
+    if (!mapCoords) return;
+    
+    const lat = mapCoords.latitude;
+    const lng = mapCoords.longitude;
+    
+    let rawLabel = report.category || 'Incidencia';
+    if (currentDescription) {
+      const shortDesc = currentDescription.length > 40 
+        ? currentDescription.substring(0, 40) + '...' 
+        : currentDescription;
+      rawLabel = `${rawLabel}: ${shortDesc}`;
+    }
+    const label = encodeURIComponent(rawLabel);
+    
+    const url = Platform.select({
+      ios: `maps:0,0?q=${label}@${lat},${lng}`,
+      android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`
+    });
+
+    if (url) {
+      Linking.canOpenURL(url).then(supported => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          Toast.show({ type: 'error', text1: 'Error', text2: 'No se encontró aplicación de mapas.' });
+        }
+      });
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PENDING': return '#F4A261'; // Naranja
-      case 'IN_PROGRESS': return '#2A9D8F'; // Verde agua
-      case 'RESOLVED': return '#264653'; // Azul oscuro
-      case 'DISMISSED': return '#E63946'; // Rojo
+      case 'PENDING': return '#F4A261';
+      case 'IN_PROGRESS': return '#2A9D8F';
+      case 'RESOLVED': return '#264653';
+      case 'DISMISSED': return '#E63946';
       default: return '#666';
     }
   };
@@ -192,6 +226,11 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
     );
   };
 
+  const openImage = (url: string) => {
+    setSelectedImageUrl(url);
+    setModalVisible(true);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -211,7 +250,9 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
       >
         <View style={{ position: 'relative' }}>
           {currentImage ? (
-            <Image source={{ uri: `${BASE_URL}${currentImage}?t=${new Date().getTime()}` }} style={styles.fullImage} resizeMode="cover" />
+            <TouchableOpacity activeOpacity={0.9} onPress={() => openImage(`${BASE_URL}${currentImage}`)}>
+              <Image source={{ uri: `${BASE_URL}${currentImage}?t=${new Date().getTime()}` }} style={styles.fullImage} resizeMode="cover" />
+            </TouchableOpacity>
           ) : (
             <View style={styles.noImageContainer}>
               <Ionicons name="image-outline" size={50} color="#ccc" />
@@ -259,7 +300,11 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
           </View>
 
           {mapCoords ? (
-            <View style={styles.mapContainer}>
+            <TouchableOpacity 
+              style={styles.mapContainer} 
+              activeOpacity={0.8} 
+              onPress={handleOpenMaps}
+            >
               <MapView
                 style={styles.miniMap}
                 initialRegion={{
@@ -268,8 +313,8 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
                   latitudeDelta: 0.002,
                   longitudeDelta: 0.002,
                 }}
-                scrollEnabled={true}
-                zoomEnabled={true}
+                scrollEnabled={false}
+                zoomEnabled={false}
                 pitchEnabled={false}
                 rotateEnabled={false}
               >
@@ -277,7 +322,11 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
                   <Ionicons name="location" size={36} color="#E63946" />
                 </Marker>
               </MapView>
-            </View>
+              <View style={styles.mapOverlayHint}>
+                <Ionicons name="navigate-circle" size={24} color="#fff" />
+                <Text style={styles.mapOverlayText}>Abrir en Google Maps</Text>
+              </View>
+            </TouchableOpacity>
           ) : (
             <View style={[styles.mapContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffe6e6', padding: 15 }]}>
               <Ionicons name="alert-circle-outline" size={30} color="#E63946" style={{ marginBottom: 5 }} />
@@ -340,7 +389,9 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
               <Text style={styles.resolutionDate}>{formatDate(report.resolution.resolvedAt)}</Text>
               <Text style={styles.resolutionText}>{report.resolution.description}</Text>
               {report.resolution.imageUrl && (
-                <Image source={{ uri: `${BASE_URL}${report.resolution.imageUrl}` }} style={styles.resolutionImage} resizeMode="cover" />
+                <TouchableOpacity activeOpacity={0.9} onPress={() => openImage(`${BASE_URL}${report.resolution.imageUrl}`)}>
+                  <Image source={{ uri: `${BASE_URL}${report.resolution.imageUrl}` }} style={styles.resolutionImage} resizeMode="cover" />
+                </TouchableOpacity>
               )}
             </View>
           )}
@@ -370,7 +421,6 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
             </View>
           )}
 
-          {/* Botón de Cancelar / Eliminar (Solo PENDING) */}
           {isPending && !isEditing && (
             <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} disabled={isProcessing}>
               {isProcessing ? (
@@ -384,7 +434,6 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
             </TouchableOpacity>
           )}
 
-          {/* Botón de Archivar (Solo RESOLVED o DISMISSED) */}
           {isClosed && (
             <TouchableOpacity style={styles.archiveButton} onPress={handleArchive} disabled={isProcessing}>
               {isProcessing ? (
@@ -400,6 +449,19 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
 
         </View>
       </KeyboardAwareScrollView>
+
+      {/* Modal de Pantalla Completa para Imágenes */}
+      <Modal visible={isModalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalBackground}>
+          <TouchableOpacity style={styles.closeModalButton} onPress={() => setModalVisible(false)}>
+            <Ionicons name="close" size={32} color="#fff" />
+          </TouchableOpacity>
+          {selectedImageUrl && (
+            <Image source={{ uri: selectedImageUrl }} style={styles.modalImage} resizeMode="contain" />
+          )}
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -423,8 +485,10 @@ const styles = StyleSheet.create({
   icon: { marginRight: 15 },
   infoLabel: { fontSize: 12, color: '#888', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: 2 },
   infoValue: { fontSize: 15, color: '#333', fontWeight: '500', textTransform: 'capitalize' },
-  mapContainer: { height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 20, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, borderWidth: 1, borderColor: '#eee' },
+  mapContainer: { height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 20, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, borderWidth: 1, borderColor: '#eee', position: 'relative' },
   miniMap: { flex: 1 },
+  mapOverlayHint: { position: 'absolute', bottom: 10, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
+  mapOverlayText: { color: '#fff', fontSize: 12, fontWeight: 'bold', marginLeft: 6 },
   descriptionBlock: { backgroundColor: '#fff', padding: 15, borderRadius: 12, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, marginBottom: 30 },
   descriptionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   descriptionText: { fontSize: 15, color: '#444', lineHeight: 22, marginTop: 8 },
@@ -439,16 +503,12 @@ const styles = StyleSheet.create({
   deleteButtonText: { color: '#E63946', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
   archiveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e9f5f4', paddingVertical: 15, borderRadius: 12, borderWidth: 1, borderColor: '#b2dfdb', marginTop: 15 },
   archiveButtonText: { color: '#264653', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
-
-  // Estilos de la Resolución Oficial
   resolutionBlock: { backgroundColor: '#e9f5f4', padding: 15, borderRadius: 12, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, marginBottom: 30, borderWidth: 1, borderColor: '#b2dfdb' },
   resolutionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   resolutionTitle: { fontSize: 16, fontWeight: 'bold', color: '#2A9D8F', marginLeft: 8, textTransform: 'uppercase' },
   resolutionDate: { fontSize: 12, color: '#666', marginBottom: 10, textTransform: 'capitalize' },
   resolutionText: { fontSize: 15, color: '#333', lineHeight: 22, marginBottom: 15 },
   resolutionImage: { width: '100%', height: 200, borderRadius: 8, backgroundColor: '#ccc' },
-  
-  // Estilos de la Línea de Tiempo
   timelineWrapper: { marginBottom: 30 },
   timelineHeaderTitle: { fontSize: 14, color: '#888', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: 15 },
   timelineContainer: { backgroundColor: '#fff', padding: 20, borderRadius: 12, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2 },
@@ -460,4 +520,9 @@ const styles = StyleSheet.create({
   timelineStatusText: { fontSize: 15, fontWeight: 'bold', marginBottom: 2 },
   timelineDateText: { fontSize: 12, color: '#999', marginBottom: 6, textTransform: 'capitalize' },
   timelineCommentText: { fontSize: 14, color: '#555', fontStyle: 'italic', backgroundColor: '#f9f9f9', padding: 10, borderRadius: 8, overflow: 'hidden' },
+  
+  // Estilos del Modal de Imágenes
+  modalBackground: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.9)', justifyContent: 'center', alignItems: 'center' },
+  closeModalButton: { position: 'absolute', top: 40, right: 20, zIndex: 10, padding: 10 },
+  modalImage: { width: '100%', height: '80%' },
 });
