@@ -20,6 +20,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
   const [currentImage, setCurrentImage] = useState(report.imageUrl);
 
   const isPending = report.status === 'PENDING';
+  const isClosed = report.status === 'RESOLVED' || report.status === 'DISMISSED';
 
   // Ordenamos el historial del más reciente al más antiguo
   const timelineEvents = Array.isArray(report.history) 
@@ -164,6 +165,33 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
     );
   };
 
+  const handleArchive = () => {
+    NativeAlert.alert(
+      "Archivar Reporte",
+      "¿Deseas ocultar este reporte de tu lista principal? Podrás mantener la limpieza de tus gestiones.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Sí, archivar", 
+          style: "default",
+          onPress: async () => {
+            setIsProcessing(true);
+            try {
+              const response = await fetch(`${BASE_URL}/alerts/${report.id}/archive`, { method: 'PATCH' });
+              if (!response.ok) throw new Error('Error al archivar');
+              
+              Toast.show({ type: 'success', text1: 'Archivado', text2: 'El reporte fue ocultado correctamente.', position: 'top' });
+              navigation.goBack();
+            } catch (error) {
+              Toast.show({ type: 'error', text1: 'Error', text2: 'No se pudo archivar el reporte.', position: 'top' });
+              setIsProcessing(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -297,13 +325,32 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
             )}
           </View>
 
-          {/* NUEVO: Bloque visual de la Línea de Tiempo */}
+          {report.resolution && (
+            <View style={[styles.resolutionBlock, report.status === 'DISMISSED' && { backgroundColor: '#ffe6e6', borderColor: '#ffcccc' }]}>
+              <View style={styles.resolutionHeader}>
+                <Ionicons 
+                  name={report.status === 'DISMISSED' ? "close-circle" : "checkmark-circle"} 
+                  size={24} 
+                  color={report.status === 'DISMISSED' ? "#E63946" : "#2A9D8F"} 
+                />
+                <Text style={[styles.resolutionTitle, report.status === 'DISMISSED' && { color: '#E63946' }]}>
+                  {report.status === 'DISMISSED' ? 'Reporte Descartado' : 'Trabajo Finalizado'}
+                </Text>
+              </View>
+              <Text style={styles.resolutionDate}>{formatDate(report.resolution.resolvedAt)}</Text>
+              <Text style={styles.resolutionText}>{report.resolution.description}</Text>
+              {report.resolution.imageUrl && (
+                <Image source={{ uri: `${BASE_URL}${report.resolution.imageUrl}` }} style={styles.resolutionImage} resizeMode="cover" />
+              )}
+            </View>
+          )}
+
           {timelineEvents.length > 0 && (
             <View style={styles.timelineWrapper}>
               <Text style={styles.timelineHeaderTitle}>Trazabilidad de Autoridades</Text>
               <View style={styles.timelineContainer}>
                 {timelineEvents.map((event, index) => (
-                  <View key={event.id} style={styles.timelineItem}>
+                  <View key={`${event.id}-${index}`} style={styles.timelineItem}>
                     <View style={styles.timelineVisuals}>
                       <View style={[styles.timelineDot, { backgroundColor: getStatusColor(event.newStatus) }]} />
                       {index !== timelineEvents.length - 1 && <View style={styles.timelineLine} />}
@@ -323,6 +370,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
             </View>
           )}
 
+          {/* Botón de Cancelar / Eliminar (Solo PENDING) */}
           {isPending && !isEditing && (
             <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} disabled={isProcessing}>
               {isProcessing ? (
@@ -331,6 +379,20 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
                 <>
                   <Ionicons name="trash-outline" size={20} color="#E63946" />
                   <Text style={styles.deleteButtonText}>Cancelar Alerta y Eliminar</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {/* Botón de Archivar (Solo RESOLVED o DISMISSED) */}
+          {isClosed && (
+            <TouchableOpacity style={styles.archiveButton} onPress={handleArchive} disabled={isProcessing}>
+              {isProcessing ? (
+                <ActivityIndicator size="small" color="#264653" />
+              ) : (
+                <>
+                  <Ionicons name="archive-outline" size={20} color="#264653" />
+                  <Text style={styles.archiveButtonText}>Archivar y Ocultar de la Lista</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -375,6 +437,16 @@ const styles = StyleSheet.create({
   saveEditText: { color: '#fff', fontWeight: 'bold' },
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffe6e6', paddingVertical: 15, borderRadius: 12, borderWidth: 1, borderColor: '#ffcccc', borderStyle: 'dashed' },
   deleteButtonText: { color: '#E63946', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
+  archiveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e9f5f4', paddingVertical: 15, borderRadius: 12, borderWidth: 1, borderColor: '#b2dfdb', marginTop: 15 },
+  archiveButtonText: { color: '#264653', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
+
+  // Estilos de la Resolución Oficial
+  resolutionBlock: { backgroundColor: '#e9f5f4', padding: 15, borderRadius: 12, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, marginBottom: 30, borderWidth: 1, borderColor: '#b2dfdb' },
+  resolutionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  resolutionTitle: { fontSize: 16, fontWeight: 'bold', color: '#2A9D8F', marginLeft: 8, textTransform: 'uppercase' },
+  resolutionDate: { fontSize: 12, color: '#666', marginBottom: 10, textTransform: 'capitalize' },
+  resolutionText: { fontSize: 15, color: '#333', lineHeight: 22, marginBottom: 15 },
+  resolutionImage: { width: '100%', height: 200, borderRadius: 8, backgroundColor: '#ccc' },
   
   // Estilos de la Línea de Tiempo
   timelineWrapper: { marginBottom: 30 },
