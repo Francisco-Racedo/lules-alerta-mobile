@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator, Linking, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator, Linking, Platform, Modal, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -7,6 +7,9 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import MapView, { Marker } from 'react-native-maps';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import ImageViewer from 'react-native-image-zoom-viewer';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 export default function DetalleReporteScreen({ route, navigation }: any) {
   const { report } = route.params;
@@ -17,11 +20,21 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
   const [editedDescription, setEditedDescription] = useState(report.description || '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentDescription, setCurrentDescription] = useState(report.description || '');
-  const [currentImage, setCurrentImage] = useState(report.imageUrl);
 
-  // Estados para la galería en pantalla completa
+  // Normalizamos las imágenes a arreglos (Compatibilidad con BD actual y futura)
+  const initialImages = report.images?.length ? report.images : (report.imageUrl ? [report.imageUrl] : []);
+  const [currentImages, setCurrentImages] = useState<string[]>(initialImages);
+
+  const [currentCarouselIndex, setCurrentCarouselIndex] = useState(0);
+
+  const resolutionImages = report.resolution?.images?.length 
+    ? report.resolution.images 
+    : (report.resolution?.imageUrl ? [report.resolution.imageUrl] : []);
+
+  // Estados unificados para el Modal de Galería Multicapa
   const [isModalVisible, setModalVisible] = useState(false);
-  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [modalImages, setModalImages] = useState<{url: string}[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const isPending = report.status === 'PENDING';
   const isClosed = report.status === 'RESOLVED' || report.status === 'DISMISSED';
@@ -30,74 +43,117 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
     ? [...report.history].sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
     : [];
 
-  const handleUpdatePhoto = async () => {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Toast.show({ type: 'error', text1: 'Permiso denegado', text2: 'Se requiere acceso a la galería.' });
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.5,
+  const handleUpdatePhoto = async (imageIndex: number) => {
+  try {
+    if (imageIndex < 0 || imageIndex >= currentImages.length) {
+      Toast.show({
+        type: 'error',
+        text1: 'Imagen inválida',
+        text2: 'No se pudo determinar qué imagen reemplazar.',
+        position: 'top',
       });
-
-      if (!result.canceled && result.assets[0].uri) {
-        setIsProcessing(true);
-        const imageUri = result.assets[0].uri;
-        const filename = imageUri.split('/').pop() || 'evidencia.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image/jpeg`;
-
-        const uploadResult = await FileSystem.uploadAsync(`${BASE_URL}/alerts/${report.id}/image`, imageUri, {
-          httpMethod: 'PATCH',
-          uploadType: 1 as any,
-          fieldName: 'file',
-          mimeType: type,
-        });
-
-        if (uploadResult.status === 200) {
-          const updatedAlert = JSON.parse(uploadResult.body);
-          setCurrentImage(updatedAlert.imageUrl);
-          Toast.show({ type: 'success', text1: 'Foto actualizada', text2: 'La evidencia se cambió correctamente.', position: 'top' });
-        } else {
-          throw new Error('Fallo en el servidor');
-        }
-      }
-    } catch (error) {
-      Toast.show({ type: 'error', text1: 'Error', text2: 'No se pudo actualizar la imagen.', position: 'top' });
-    } finally {
-      setIsProcessing(false);
+      return;
     }
-  };
+
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Toast.show({
+        type: 'error',
+        text1: 'Permiso denegado',
+        text2: 'Se requiere acceso a la galería.',
+        position: 'top',
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: false,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+    });
+
+    if (result.canceled || !result.assets[0]?.uri) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    const imageUri = result.assets[0].uri;
+    const filename =
+      result.assets[0].fileName ||
+      imageUri.split('/').pop() ||
+      'evidencia.jpg';
+
+    const match = /\.(\w+)$/.exec(filename);
+    const type = result.assets[0].mimeType ||
+      (match ? `image/${match[1]}` : 'image/jpeg');
+
+    const uploadResult = await FileSystem.uploadAsync(
+      `${BASE_URL}/alerts/${report.id}/images/${imageIndex}`,
+      imageUri,
+      {
+        httpMethod: 'PATCH',
+        uploadType: 1 as any,
+        fieldName: 'file',
+        mimeType: type,
+      },
+    );
+
+    if (uploadResult.status !== 200) {
+      throw new Error(
+        `El servidor respondió con estado ${uploadResult.status}`,
+      );
+    }
+
+    const updatedAlert = JSON.parse(uploadResult.body);
+
+    const updatedImages = updatedAlert.images?.length
+      ? updatedAlert.images
+      : updatedAlert.imageUrl
+        ? [updatedAlert.imageUrl]
+        : [];
+
+    setCurrentImages(updatedImages);
+
+    Toast.show({
+      type: 'success',
+      text1: 'Foto actualizada',
+      text2: 'La imagen seleccionada fue reemplazada correctamente.',
+      position: 'top',
+    });
+  } catch (error) {
+    console.error('Fallo al actualizar la imagen:', error);
+
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: 'No se pudo reemplazar la imagen.',
+      position: 'top',
+    });
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   let mapCoords = null;
   if (report.location && report.location.coordinates && Array.isArray(report.location.coordinates)) {
-    mapCoords = {
-      latitude: Number(report.location.coordinates[1]),
-      longitude: Number(report.location.coordinates[0]),
-    };
+    mapCoords = { latitude: Number(report.location.coordinates[1]), longitude: Number(report.location.coordinates[0]) };
   } else if (report.latitude && report.longitude) {
-    mapCoords = {
-      latitude: Number(report.latitude),
-      longitude: Number(report.longitude),
-    };
+    mapCoords = { latitude: Number(report.latitude), longitude: Number(report.longitude) };
   }
 
   const handleOpenMaps = () => {
     if (!mapCoords) return;
-    
     const lat = mapCoords.latitude;
     const lng = mapCoords.longitude;
     
     let rawLabel = report.category || 'Incidencia';
     if (currentDescription) {
-      const shortDesc = currentDescription.length > 40 
-        ? currentDescription.substring(0, 40) + '...' 
-        : currentDescription;
+      const shortDesc = currentDescription.length > 40 ? currentDescription.substring(0, 40) + '...' : currentDescription;
       rawLabel = `${rawLabel}: ${shortDesc}`;
     }
     const label = encodeURIComponent(rawLabel);
@@ -109,11 +165,8 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
 
     if (url) {
       Linking.canOpenURL(url).then(supported => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Toast.show({ type: 'error', text1: 'Error', text2: 'No se encontró aplicación de mapas.' });
-        }
+        if (supported) Linking.openURL(url);
+        else Toast.show({ type: 'error', text1: 'Error', text2: 'No se encontró aplicación de mapas.' });
       });
     }
   };
@@ -139,10 +192,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
   };
 
   const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', 
-      hour: '2-digit', minute: '2-digit' 
-    };
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(dateString).toLocaleDateString('es-ES', options);
   };
 
@@ -151,7 +201,6 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'La descripción no puede estar vacía.', position: 'top' });
       return;
     }
-    
     setIsProcessing(true);
     try {
       const response = await fetch(`${BASE_URL}/alerts/${report.id}/description`, {
@@ -159,9 +208,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: editedDescription.trim() })
       });
-
       if (!response.ok) throw new Error('Error al actualizar');
-      
       setCurrentDescription(editedDescription.trim());
       setIsEditing(false);
       Toast.show({ type: 'success', text1: 'Actualizado', text2: 'La descripción fue guardada con éxito.', position: 'top' });
@@ -173,63 +220,57 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
   };
 
   const handleDelete = () => {
-    NativeAlert.alert(
-      "Cancelar Reporte",
-      "¿Estás seguro de que deseas eliminar este reporte de emergencia? Esta acción no se puede deshacer.",
-      [
-        { text: "No, mantener", style: "cancel" },
-        { 
-          text: "Sí, cancelar alerta", 
-          style: "destructive",
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              const response = await fetch(`${BASE_URL}/alerts/${report.id}`, { method: 'DELETE' });
-              if (!response.ok) throw new Error('Error al eliminar');
-              
-              Toast.show({ type: 'success', text1: 'Cancelado', text2: 'El reporte fue eliminado correctamente.', position: 'top' });
-              navigation.goBack();
-            } catch (error) {
-              Toast.show({ type: 'error', text1: 'Fallo al Eliminar', text2: 'Ocurrió un error de conexión.', position: 'top' });
-              setIsProcessing(false);
-            }
+    NativeAlert.alert("Cancelar Reporte", "¿Estás seguro de que deseas eliminar este reporte de emergencia? Esta acción no se puede deshacer.", [
+      { text: "No, mantener", style: "cancel" },
+      { 
+        text: "Sí, cancelar alerta", style: "destructive",
+        onPress: async () => {
+          setIsProcessing(true);
+          try {
+            const response = await fetch(`${BASE_URL}/alerts/${report.id}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Error al eliminar');
+            Toast.show({ type: 'success', text1: 'Cancelado', text2: 'El reporte fue eliminado correctamente.', position: 'top' });
+            navigation.goBack();
+          } catch (error) {
+            Toast.show({ type: 'error', text1: 'Fallo al Eliminar', text2: 'Ocurrió un error de conexión.', position: 'top' });
+            setIsProcessing(false);
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
   const handleArchive = () => {
-    NativeAlert.alert(
-      "Archivar Reporte",
-      "¿Deseas ocultar este reporte de tu lista principal? Podrás mantener la limpieza de tus gestiones.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Sí, archivar", 
-          style: "default",
-          onPress: async () => {
-            setIsProcessing(true);
-            try {
-              const response = await fetch(`${BASE_URL}/alerts/${report.id}/archive`, { method: 'PATCH' });
-              if (!response.ok) throw new Error('Error al archivar');
-              
-              Toast.show({ type: 'success', text1: 'Archivado', text2: 'El reporte fue ocultado correctamente.', position: 'top' });
-              navigation.goBack();
-            } catch (error) {
-              Toast.show({ type: 'error', text1: 'Error', text2: 'No se pudo archivar el reporte.', position: 'top' });
-              setIsProcessing(false);
-            }
+    NativeAlert.alert("Archivar Reporte", "¿Deseas ocultar este reporte de tu lista principal? Podrás mantener la limpieza de tus gestiones.", [
+      { text: "Cancelar", style: "cancel" },
+      { 
+        text: "Sí, archivar", style: "default",
+        onPress: async () => {
+          setIsProcessing(true);
+          try {
+            const response = await fetch(`${BASE_URL}/alerts/${report.id}/archive`, { method: 'PATCH' });
+            if (!response.ok) throw new Error('Error al archivar');
+            Toast.show({ type: 'success', text1: 'Archivado', text2: 'El reporte fue ocultado correctamente.', position: 'top' });
+            navigation.goBack();
+          } catch (error) {
+            Toast.show({ type: 'error', text1: 'Error', text2: 'No se pudo archivar el reporte.', position: 'top' });
+            setIsProcessing(false);
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
-  const openImage = (url: string) => {
-    setSelectedImageUrl(url);
-    setModalVisible(true);
-  };
+  // Función unificada para inyectar arreglos dinámicos a la galería modal
+  const openGallery = (imagesArray: string[], startIndex: number) => {
+  setModalImages(
+    imagesArray.map((img) => ({
+      url: `${BASE_URL}${img}`,
+    })),
+  );
+  setCurrentImageIndex(startIndex);
+  setModalVisible(true);
+};
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -248,11 +289,50 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
         extraScrollHeight={120} 
         keyboardShouldPersistTaps="handled"
       >
+        
+        {/* CARRUSEL DE EVIDENCIA PRINCIPAL */}
         <View style={{ position: 'relative' }}>
-          {currentImage ? (
-            <TouchableOpacity activeOpacity={0.9} onPress={() => openImage(`${BASE_URL}${currentImage}`)}>
-              <Image source={{ uri: `${BASE_URL}${currentImage}?t=${new Date().getTime()}` }} style={styles.fullImage} resizeMode="cover" />
-            </TouchableOpacity>
+          {currentImages.length > 0 ? (
+            <>
+              <ScrollView
+  horizontal
+  pagingEnabled
+  showsHorizontalScrollIndicator={false}
+  onMomentumScrollEnd={(event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / screenWidth);
+
+    setCurrentCarouselIndex(index);
+  }}
+>
+  {currentImages.map((img, idx) => (
+    <TouchableOpacity
+      key={`${img}-${idx}`}
+      activeOpacity={0.9}
+      onPress={() => openGallery(currentImages, idx)}
+      style={{
+        width: screenWidth,
+        height: 300,
+      }}
+    >
+      <Image
+  source={{
+    uri: `${BASE_URL}${img}`,
+  }}
+  style={styles.fullImage}
+  resizeMode="cover"
+/>
+    </TouchableOpacity>
+  ))}
+</ScrollView>
+              {/* Indicador visual de múltiples fotos */}
+              {currentImages.length > 1 && (
+                <View style={styles.carouselIndicator}>
+                  <Ionicons name="images-outline" size={14} color="#fff" />
+                  <Text style={styles.carouselIndicatorText}>{currentImages.length} Fotos</Text>
+                </View>
+              )}
+            </>
           ) : (
             <View style={styles.noImageContainer}>
               <Ionicons name="image-outline" size={50} color="#ccc" />
@@ -260,16 +340,35 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
             </View>
           )}
           
-          {isPending && (
-            <TouchableOpacity 
-              style={{ position: 'absolute', bottom: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.6)', padding: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center' }} 
-              onPress={handleUpdatePhoto}
-              disabled={isProcessing}
-            >
-              <Ionicons name="camera-outline" size={20} color="#fff" />
-              <Text style={{ color: '#fff', marginLeft: 5, fontWeight: 'bold', fontSize: 12 }}>Cambiar Foto</Text>
-            </TouchableOpacity>
-          )}
+          {isPending && currentImages.length > 0 && (
+  <TouchableOpacity
+    style={{
+      position: 'absolute',
+      bottom: 15,
+      right: 15,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      padding: 10,
+      borderRadius: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+    }}
+    onPress={() => handleUpdatePhoto(currentCarouselIndex)}
+    disabled={isProcessing}
+  >
+    <Ionicons name="camera-outline" size={20} color="#fff" />
+
+    <Text
+      style={{
+        color: '#fff',
+        marginLeft: 5,
+        fontWeight: 'bold',
+        fontSize: 12,
+      }}
+    >
+      Cambiar Foto {currentCarouselIndex + 1}
+    </Text>
+  </TouchableOpacity>
+)}
         </View>
 
         <View style={styles.content}>
@@ -300,23 +399,11 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
           </View>
 
           {mapCoords ? (
-            <TouchableOpacity 
-              style={styles.mapContainer} 
-              activeOpacity={0.8} 
-              onPress={handleOpenMaps}
-            >
+            <TouchableOpacity style={styles.mapContainer} activeOpacity={0.8} onPress={handleOpenMaps}>
               <MapView
                 style={styles.miniMap}
-                initialRegion={{
-                  latitude: mapCoords.latitude,
-                  longitude: mapCoords.longitude,
-                  latitudeDelta: 0.002,
-                  longitudeDelta: 0.002,
-                }}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                pitchEnabled={false}
-                rotateEnabled={false}
+                initialRegion={{ latitude: mapCoords.latitude, longitude: mapCoords.longitude, latitudeDelta: 0.002, longitudeDelta: 0.002 }}
+                scrollEnabled={false} zoomEnabled={false} pitchEnabled={false} rotateEnabled={false}
               >
                 <Marker coordinate={mapCoords}>
                   <Ionicons name="location" size={36} color="#E63946" />
@@ -330,12 +417,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
           ) : (
             <View style={[styles.mapContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffe6e6', padding: 15 }]}>
               <Ionicons name="alert-circle-outline" size={30} color="#E63946" style={{ marginBottom: 5 }} />
-              <Text style={{ color: '#E63946', textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>
-                Error de coordenadas backend:
-              </Text>
-              <Text style={{ color: '#E63946', textAlign: 'center', fontSize: 10, marginTop: 5 }}>
-                {JSON.stringify(report.location) || 'El campo location es null o indefinido.'}
-              </Text>
+              <Text style={{ color: '#E63946', textAlign: 'center', fontSize: 12, fontWeight: 'bold' }}>Error de coordenadas</Text>
             </View>
           )}
 
@@ -351,13 +433,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
 
             {isEditing ? (
               <View style={styles.editContainer}>
-                <TextInput
-                  style={styles.editInput}
-                  value={editedDescription}
-                  onChangeText={setEditedDescription}
-                  multiline
-                  autoFocus
-                />
+                <TextInput style={styles.editInput} value={editedDescription} onChangeText={setEditedDescription} multiline autoFocus />
                 <View style={styles.editActions}>
                   <TouchableOpacity style={styles.cancelEditBtn} onPress={() => setIsEditing(false)}>
                     <Text style={styles.cancelEditText}>Cancelar</Text>
@@ -368,30 +444,43 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
                 </View>
               </View>
             ) : (
-              <Text style={styles.descriptionText}>
-                {currentDescription || 'No se proporcionaron detalles adicionales para este reporte.'}
-              </Text>
+              <Text style={styles.descriptionText}>{currentDescription || 'No se proporcionaron detalles.'}</Text>
             )}
           </View>
 
+          {/* CARRUSEL DE TRABAJO FINALIZADO (RESOLUCIÓN) */}
           {report.resolution && (
             <View style={[styles.resolutionBlock, report.status === 'DISMISSED' && { backgroundColor: '#ffe6e6', borderColor: '#ffcccc' }]}>
               <View style={styles.resolutionHeader}>
-                <Ionicons 
-                  name={report.status === 'DISMISSED' ? "close-circle" : "checkmark-circle"} 
-                  size={24} 
-                  color={report.status === 'DISMISSED' ? "#E63946" : "#2A9D8F"} 
-                />
+                <Ionicons name={report.status === 'DISMISSED' ? "close-circle" : "checkmark-circle"} size={24} color={report.status === 'DISMISSED' ? "#E63946" : "#2A9D8F"} />
                 <Text style={[styles.resolutionTitle, report.status === 'DISMISSED' && { color: '#E63946' }]}>
                   {report.status === 'DISMISSED' ? 'Reporte Descartado' : 'Trabajo Finalizado'}
                 </Text>
               </View>
               <Text style={styles.resolutionDate}>{formatDate(report.resolution.resolvedAt)}</Text>
               <Text style={styles.resolutionText}>{report.resolution.description}</Text>
-              {report.resolution.imageUrl && (
-                <TouchableOpacity activeOpacity={0.9} onPress={() => openImage(`${BASE_URL}${report.resolution.imageUrl}`)}>
-                  <Image source={{ uri: `${BASE_URL}${report.resolution.imageUrl}` }} style={styles.resolutionImage} resizeMode="cover" />
-                </TouchableOpacity>
+              
+              {resolutionImages.length > 0 && (
+                <View style={{ marginTop: 10 }}>
+                  <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+                    {resolutionImages.map((img: string, idx: number) => (
+                      <TouchableOpacity 
+                        key={idx} 
+                        activeOpacity={0.9} 
+                        onPress={() => openGallery(resolutionImages, idx)} 
+                        // El ancho es exacto al contenedor interno para habilitar la paginación fluida
+                        style={{ width: screenWidth - 70, height: 200 }}
+                      >
+                        <Image source={{ uri: `${BASE_URL}${img}` }} style={styles.resolutionImage} resizeMode="cover" />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {resolutionImages.length > 1 && (
+                    <Text style={{ textAlign: 'center', fontSize: 12, color: '#2A9D8F', marginTop: 8, fontWeight: 'bold' }}>
+                      Desliza para ver más fotos ({resolutionImages.length})
+                    </Text>
+                  )}
+                </View>
               )}
             </View>
           )}
@@ -407,13 +496,9 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
                       {index !== timelineEvents.length - 1 && <View style={styles.timelineLine} />}
                     </View>
                     <View style={styles.timelineContentBox}>
-                      <Text style={[styles.timelineStatusText, { color: getStatusColor(event.newStatus) }]}>
-                        {getStatusText(event.newStatus)}
-                      </Text>
+                      <Text style={[styles.timelineStatusText, { color: getStatusColor(event.newStatus) }]}>{getStatusText(event.newStatus)}</Text>
                       <Text style={styles.timelineDateText}>{formatDate(event.changedAt)}</Text>
-                      {event.comment ? (
-                        <Text style={styles.timelineCommentText}>{event.comment}</Text>
-                      ) : null}
+                      {event.comment ? <Text style={styles.timelineCommentText}>{event.comment}</Text> : null}
                     </View>
                   </View>
                 ))}
@@ -423,26 +508,16 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
 
           {isPending && !isEditing && (
             <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} disabled={isProcessing}>
-              {isProcessing ? (
-                <ActivityIndicator size="small" color="#E63946" />
-              ) : (
-                <>
-                  <Ionicons name="trash-outline" size={20} color="#E63946" />
-                  <Text style={styles.deleteButtonText}>Cancelar Alerta y Eliminar</Text>
-                </>
+              {isProcessing ? <ActivityIndicator size="small" color="#E63946" /> : (
+                <><Ionicons name="trash-outline" size={20} color="#E63946" /><Text style={styles.deleteButtonText}>Cancelar Alerta y Eliminar</Text></>
               )}
             </TouchableOpacity>
           )}
 
           {isClosed && (
             <TouchableOpacity style={styles.archiveButton} onPress={handleArchive} disabled={isProcessing}>
-              {isProcessing ? (
-                <ActivityIndicator size="small" color="#264653" />
-              ) : (
-                <>
-                  <Ionicons name="archive-outline" size={20} color="#264653" />
-                  <Text style={styles.archiveButtonText}>Archivar y Ocultar de la Lista</Text>
-                </>
+              {isProcessing ? <ActivityIndicator size="small" color="#264653" /> : (
+                <><Ionicons name="archive-outline" size={20} color="#264653" /><Text style={styles.archiveButtonText}>Archivar y Ocultar de la Lista</Text></>
               )}
             </TouchableOpacity>
           )}
@@ -450,14 +525,35 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
         </View>
       </KeyboardAwareScrollView>
 
-      {/* Modal de Pantalla Completa para Imágenes */}
+      {/* MODAL UNIFICADO MULTICAPA (ZOOM Y CARRUSEL NATIVO) */}
       <Modal visible={isModalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalBackground}>
-          <TouchableOpacity style={styles.closeModalButton} onPress={() => setModalVisible(false)}>
+          <TouchableOpacity 
+            style={styles.closeModalButton} 
+            onPress={() => setModalVisible(false)}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
             <Ionicons name="close" size={32} color="#fff" />
           </TouchableOpacity>
-          {selectedImageUrl && (
-            <Image source={{ uri: selectedImageUrl }} style={styles.modalImage} resizeMode="contain" />
+          
+          {modalImages.length > 0 && (
+            <ImageViewer 
+              imageUrls={modalImages}
+              index={currentImageIndex}
+              onChange={(index) => setCurrentImageIndex(index || 0)}
+              enableSwipeDown={true}
+              onSwipeDown={() => setModalVisible(false)}
+              backgroundColor="rgba(0,0,0,0.95)"
+              style={{ width: '100%', height: '100%' }}
+              // Renderizamos una pequeña paginación arriba si hay más de 1 foto
+              renderIndicator={(currentIndex, allSize) => 
+                allSize && allSize > 1 ? (
+                  <View style={styles.modalPagination}>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{currentIndex} / {allSize}</Text>
+                  </View>
+                ) : <View />
+              }
+            />
           )}
         </View>
       </Modal>
@@ -475,6 +571,11 @@ const styles = StyleSheet.create({
   fullImage: { width: '100%', height: 300, backgroundColor: '#eee' },
   noImageContainer: { width: '100%', height: 200, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
   noImageText: { color: '#888', marginTop: 10 },
+  
+  // Estilos nuevos para el Carrusel
+  carouselIndicator: { position: 'absolute', top: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15, flexDirection: 'row', alignItems: 'center' },
+  carouselIndicatorText: { color: '#fff', fontWeight: 'bold', fontSize: 12, marginLeft: 5 },
+  
   content: { padding: 20, marginTop: -20, backgroundColor: '#f8f9fa', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
   categoryBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffe6e6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
@@ -521,8 +622,8 @@ const styles = StyleSheet.create({
   timelineDateText: { fontSize: 12, color: '#999', marginBottom: 6, textTransform: 'capitalize' },
   timelineCommentText: { fontSize: 14, color: '#555', fontStyle: 'italic', backgroundColor: '#f9f9f9', padding: 10, borderRadius: 8, overflow: 'hidden' },
   
-  // Estilos del Modal de Imágenes
-  modalBackground: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.9)', justifyContent: 'center', alignItems: 'center' },
-  closeModalButton: { position: 'absolute', top: 40, right: 20, zIndex: 10, padding: 10 },
-  modalImage: { width: '100%', height: '80%' },
+  // Estilos del Modal Multicapa
+  modalBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
+  closeModalButton: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 },
+  modalPagination: { position: 'absolute', top: 60, left: 0, right: 0, alignItems: 'center', zIndex: 5 },
 });

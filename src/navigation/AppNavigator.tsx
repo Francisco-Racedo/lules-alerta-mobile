@@ -57,6 +57,7 @@ function TabNavigator() {
       })}
     >
       <Tab.Screen name="Mapa" component={HomeScreen} />
+      {/* AQUÍ ESTÁ LA CLAVE: Debe apuntar a MyReportsScreen para que la pestaña muestre el listado */}
       <Tab.Screen name="Mis Reportes" component={MyReportsScreen} />
       <Tab.Screen name="Avisos" component={NoticesScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
