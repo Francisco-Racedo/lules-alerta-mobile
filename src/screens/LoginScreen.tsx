@@ -5,6 +5,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  BASE_URL,
+  fetchWithTimeout,
+  getErrorMessage,
+  isValidDni,
+  parseLoginResponse,
+} from '../services/auth';
 
 export default function LoginScreen({ navigation }: any) {
   const [dni, setDni] = useState('');
@@ -35,8 +42,8 @@ export default function LoginScreen({ navigation }: any) {
     if (!dni) {
       setDniError('El DNI es obligatorio.');
       isValid = false;
-    } else if (dni.length < 7) {
-      setDniError('El DNI debe tener al menos 7 dígitos.');
+    } else if (!isValidDni(dni)) {
+      setDniError('El DNI debe tener entre 7 y 8 dígitos.');
       isValid = false;
     }
 
@@ -50,7 +57,7 @@ export default function LoginScreen({ navigation }: any) {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://192.168.100.131:3000/users/login', {
+      const response = await fetchWithTimeout(`${BASE_URL}/users/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,27 +65,33 @@ export default function LoginScreen({ navigation }: any) {
         body: JSON.stringify({ dni, password }),
       });
 
-      const data = await response.json();
+      const data: unknown = await response.json();
 
       if (!response.ok) {
+        const message = getErrorMessage(data);
         Alert.alert(
-          'Error de Autenticación', 
-          Array.isArray(data.message) ? data.message.join('\n') : (data.message || 'Credenciales incorrectas')
+          'Error de Autenticación',
+          message || 'Credenciales incorrectas',
         );
-        setIsLoading(false);
         return;
       }
 
-      // Guardar el Token JWT y los datos del ciudadano en la memoria del teléfono
-      await AsyncStorage.setItem('userToken', data.access_token);
-      await AsyncStorage.setItem('userData', JSON.stringify(data.user));
+      const authResponse = parseLoginResponse(data);
+
+      await AsyncStorage.setItem('userToken', authResponse.access_token);
+      await AsyncStorage.setItem(
+        'userData',
+        JSON.stringify(authResponse.user),
+      );
 
       // Redirección directa al mapa sin posibilidad de volver atrás con el botón nativo
       navigation.replace('MainTabs');
 
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error de Conexión', 'No pudimos conectarnos con el servidor. Verifica tu red.');
+    } catch {
+      Alert.alert(
+        'Error de Conexión',
+        'No pudimos conectarnos con el servidor. Inténtalo nuevamente.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -146,6 +159,14 @@ export default function LoginScreen({ navigation }: any) {
           <TouchableOpacity style={styles.registerLink} onPress={() => navigation.navigate('Register')} disabled={isLoading}>
             <Text style={styles.registerText}>¿No tienes cuenta? <Text style={styles.registerTextBold}>Regístrate aquí</Text></Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.recoveryLink}
+            onPress={() => navigation.navigate('ForgotPassword')}
+            disabled={isLoading}
+          >
+            <Text style={styles.recoveryText}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -170,5 +191,7 @@ const styles = StyleSheet.create({
   loginText: { color: '#fff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
   registerLink: { marginTop: 20, alignItems: 'center' },
   registerText: { color: '#666', fontSize: 14 },
-  registerTextBold: { color: '#E63946', fontWeight: 'bold' }
+  registerTextBold: { color: '#E63946', fontWeight: 'bold' },
+  recoveryLink: { marginTop: 18, alignItems: 'center' },
+  recoveryText: { color: '#E63946', fontSize: 14, fontWeight: 'bold' }
 });

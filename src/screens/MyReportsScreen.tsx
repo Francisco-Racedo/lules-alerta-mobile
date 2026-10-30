@@ -14,6 +14,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import {
+  BASE_URL,
+  fetchWithTimeout,
+} from '../services/auth';
 
 type ReportItem = {
   id: string;
@@ -32,9 +36,6 @@ type ReportsResponse = {
   currentPage?: number;
   lastPage?: number;
 };
-
-const BASE_URL = 'http://192.168.100.131:3000';
-const REQUEST_TIMEOUT_MS = 8000;
 
 const isReportItem = (value: unknown): value is ReportItem => {
   if (!value || typeof value !== 'object') {
@@ -61,30 +62,6 @@ const parseReportsResponse = (value: unknown): ReportsResponse => {
   };
 };
 
-const fetchWithTimeout = async (
-  url: string,
-  timeoutMs: number,
-): Promise<Response> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-
-  try {
-    return await fetch(url, {
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error('La solicitud superó el tiempo de espera.');
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-};
-
 export default function MyReportsScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
 
@@ -108,27 +85,19 @@ export default function MyReportsScreen({ navigation }: any) {
       setErrorMessage(null);
 
       try {
-        const storedData = await AsyncStorage.getItem('userData');
+        const userToken = await AsyncStorage.getItem('userToken');
 
-        if (!storedData) {
-          throw new Error('No se encontró la información del usuario.');
+        if (!userToken) {
+          throw new Error('La sesión no está disponible.');
         }
 
-        let user: { id?: unknown };
-
-        try {
-          user = JSON.parse(storedData) as { id?: unknown };
-        } catch {
-          throw new Error('La información local del usuario no es válida.');
-        }
-
-        if (typeof user.id !== 'string' || user.id.length === 0) {
-          throw new Error('El usuario almacenado no tiene un identificador válido.');
-        }
-
-                const activeResponse = await fetchWithTimeout(
-          `${BASE_URL}/alerts/user/${user.id}?page=1&limit=50&archived=false`,
-          REQUEST_TIMEOUT_MS,
+        const activeResponse = await fetchWithTimeout(
+          `${BASE_URL}/alerts/me?page=1&limit=50&archived=false`,
+          {
+            headers: {
+              Authorization: `Bearer ${userToken}`,
+            },
+          },
         );
 
         if (!activeResponse.ok) {
@@ -140,9 +109,13 @@ export default function MyReportsScreen({ navigation }: any) {
         const activeJson: unknown = await activeResponse.json();
         const activeData = parseReportsResponse(activeJson);
 
-                const archivedResponse = await fetchWithTimeout(
-          `${BASE_URL}/alerts/user/${user.id}?page=1&limit=50&archived=true`,
-          REQUEST_TIMEOUT_MS,
+        const archivedResponse = await fetchWithTimeout(
+          `${BASE_URL}/alerts/me?page=1&limit=50&archived=true`,
+          {
+            headers: {
+              Authorization: `Bearer ${userToken}`,
+            },
+          },
         );
 
         if (!archivedResponse.ok) {

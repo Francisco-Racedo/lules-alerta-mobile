@@ -5,10 +5,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  clearSession,
+  getCurrentUser,
+} from '../services/auth';
 
 import HomeScreen from '../screens/HomeScreen';
 import ReportFormScreen from '../screens/ReportFormScreen';
 import LoginScreen from '../screens/LoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 // 1. Nueva importación agregada
@@ -73,12 +78,25 @@ export default function AppNavigator() {
     const checkLoginStatus = async () => {
       try {
         const userToken = await AsyncStorage.getItem('userToken');
-        if (userToken) {
-          // Si el token existe, cambiamos la ruta inicial directamente al mapa
-          setInitialRoute('MainTabs');
+
+        if (!userToken) {
+          return;
         }
-      } catch (error) {
-        console.error('Error leyendo el token de sesión:', error);
+
+        const currentUser = await getCurrentUser(userToken);
+
+        if (!currentUser) {
+          await clearSession();
+          return;
+        }
+
+        await AsyncStorage.setItem(
+          'userData',
+          JSON.stringify(currentUser),
+        );
+        setInitialRoute('MainTabs');
+      } catch {
+        setInitialRoute('Login');
       } finally {
         setIsLoading(false);
       }
@@ -109,6 +127,11 @@ export default function AppNavigator() {
         name="Register" 
         component={RegisterScreen} 
         options={{ headerShown: false }} 
+      />
+      <Stack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{ headerShown: false }}
       />
 
       {/* 2. Aplicación Principal (Protegida) */}
