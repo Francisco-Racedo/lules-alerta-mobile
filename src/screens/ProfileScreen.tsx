@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { BASE_URL } from '../services/auth';
 
 export default function ProfileScreen({ navigation }: any) {
   const [userData, setUserData] = useState<any>(null);
@@ -51,7 +52,7 @@ export default function ProfileScreen({ navigation }: any) {
   const renderAvatarSource = () => {
     if (!userData?.fotoPerfil) return undefined;
     if (userData.fotoPerfil.startsWith('file')) return { uri: userData.fotoPerfil };
-    return { uri: `http://192.168.100.131:3000${userData.fotoPerfil}` };
+    return { uri: `${BASE_URL}${userData.fotoPerfil}` };
   };
 
   return (

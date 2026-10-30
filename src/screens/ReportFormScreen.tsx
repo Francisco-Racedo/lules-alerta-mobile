@@ -15,9 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
+import { BASE_URL } from '../services/auth';
 
 const MAX_IMAGES = 5;
-const BASE_URL = 'http://192.168.100.131:3000';
 
 type ReactNativeFormDataFile = {
   uri: string;

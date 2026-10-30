@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BASE_URL } from '../services/auth';
 
 export default function RegisterScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -65,8 +66,7 @@ export default function RegisterScreen({ navigation }: any) {
     setIsLoading(true);
 
     try {
-      // Petición al servidor usando tu dirección IP local
-      const response = await fetch('http://192.168.100.131:3000/users', {
+      const response = await fetch(`${BASE_URL}/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

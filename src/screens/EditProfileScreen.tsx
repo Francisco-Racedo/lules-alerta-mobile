@@ -10,6 +10,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import Toast from 'react-native-toast-message';
+import { BASE_URL } from '../services/auth';
 
 export default function EditProfileScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -122,7 +123,6 @@ export default function EditProfileScreen({ navigation }: any) {
     setLoading(true);
     
     try {
-      const BASE_URL = 'http://192.168.100.131:3000';
       const API_URL = `${BASE_URL}/users/${userId}`; 
       
       const response = await fetch(API_URL, {
@@ -209,7 +209,7 @@ export default function EditProfileScreen({ navigation }: any) {
   const renderAvatarSource = () => {
     if (!fotoPerfil) return undefined; 
     if (fotoPerfil.startsWith('file')) return { uri: fotoPerfil };
-    return { uri: `http://192.168.100.131:3000${fotoPerfil}` };
+    return { uri: `${BASE_URL}${fotoPerfil}` };
   };
 
   return (

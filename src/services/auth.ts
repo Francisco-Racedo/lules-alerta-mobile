@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const BASE_URL = 'http://192.168.100.131:3000';
-export const REQUEST_TIMEOUT_MS = 8000;
+export const BASE_URL = 'https://lules-alerta-api.onrender.com';
+export const REQUEST_TIMEOUT_MS = 60000;
 export const MAX_PASSWORD_LENGTH = 72;
 
 export const isValidDni = (value: string): boolean =>

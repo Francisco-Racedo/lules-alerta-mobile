@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { BASE_URL } from '../services/auth';
 
 const BARRIOS_LULES = [
   'Todo Lules',
@@ -24,8 +25,6 @@ const BARRIOS_LULES = [
   'San Martín',
   'La Quebrada',
 ];
-
-const BASE_URL = 'http://192.168.100.131:3000';
 
 export default function NoticesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();

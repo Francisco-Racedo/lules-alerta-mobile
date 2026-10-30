@@ -8,14 +8,13 @@ import MapView, { Marker } from 'react-native-maps';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import ImageViewer from 'react-native-image-zoom-viewer';
+import { BASE_URL } from '../services/auth';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function DetalleReporteScreen({ route, navigation }: any) {
   const { report } = route.params;
   const insets = useSafeAreaInsets();
-  const BASE_URL = 'http://192.168.100.131:3000';
-
   const [isEditing, setIsEditing] = useState(false);
   const [editedDescription, setEditedDescription] = useState(report.description || '');
   const [isProcessing, setIsProcessing] = useState(false);
