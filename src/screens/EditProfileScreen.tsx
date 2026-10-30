@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import Toast from 'react-native-toast-message';
 import { BASE_URL } from '../services/auth';
 
@@ -124,10 +124,17 @@ export default function EditProfileScreen({ navigation }: any) {
     
     try {
       const API_URL = `${BASE_URL}/users/${userId}`; 
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        throw new Error('La sesión expiró. Inicia sesión nuevamente.');
+      }
       
       const response = await fetch(API_URL, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           nombre: nombre.trim(), 
           telefono, 
@@ -141,7 +148,25 @@ export default function EditProfileScreen({ navigation }: any) {
       });
 
       if (!response.ok) {
-        throw new Error('Fallo al actualizar en el servidor');
+        let message = 'No se pudieron guardar los datos del perfil.';
+        try {
+          const errorData: unknown = await response.json();
+          if (
+            errorData &&
+            typeof errorData === 'object' &&
+            'message' in errorData
+          ) {
+            const serverMessage = (errorData as { message?: unknown }).message;
+            if (typeof serverMessage === 'string') {
+              message = serverMessage;
+            } else if (Array.isArray(serverMessage)) {
+              message = serverMessage.join('\n');
+            }
+          }
+        } catch {
+          // Conserva el mensaje genérico si el servidor no devuelve JSON.
+        }
+        throw new Error(message);
       }
 
       let finalAvatarUrl = null;
@@ -153,9 +178,12 @@ export default function EditProfileScreen({ navigation }: any) {
 
         const uploadResult = await FileSystem.uploadAsync(`${API_URL}/avatar`, fotoPerfil, {
           httpMethod: 'PATCH',
-          uploadType: 1 as any, 
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
           fieldName: 'file',
           mimeType: type,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
         if (uploadResult.status >= 200 && uploadResult.status < 300) {
@@ -197,7 +225,10 @@ export default function EditProfileScreen({ navigation }: any) {
       Toast.show({
         type: 'error',
         text1: 'Error de Conexión',
-        text2: 'Hubo un problema al conectar con el servidor.',
+        text2:
+          error instanceof Error
+            ? error.message
+            : 'Hubo un problema al conectar con el servidor.',
         position: 'top'
       });
       console.error(error);
