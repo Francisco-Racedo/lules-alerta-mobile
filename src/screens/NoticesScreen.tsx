@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
-  Modal, TextInput, ScrollView, Linking, Share, Image 
+  Modal, TextInput, ScrollView, Linking, Share, Image, RefreshControl
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { BASE_URL } from '../services/auth';
+import { BASE_URL, fetchWithTimeout } from '../services/auth';
 
 const BARRIOS_LULES = [
   'Todo Lules',
@@ -30,23 +30,29 @@ export default function NoticesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [userBarrio, setUserBarrio] = useState<string>('');
   
   const [selectedBarrio, setSelectedBarrio] = useState<string>('Todo Lules');
   const [selectedSeverity, setSelectedSeverity] = useState<'TODOS' | 'CRITICAL' | 'WARNING' | 'INFO'>('TODOS');
+  const [selectedSource, setSelectedSource] = useState<'TODOS' | 'OFICIAL' | 'VECINAL'>('TODOS');
+  const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
   
   const [barrioModalVisible, setBarrioModalVisible] = useState(false);
   const [searchBarrio, setSearchBarrio] = useState('');
 
   useFocusEffect(
     React.useCallback(() => {
-      loadUserAndNotices();
-    }, [selectedBarrio, selectedSeverity])
+      void loadUserAndNotices();
+    }, [selectedBarrio, selectedSeverity, selectedSource])
   );
 
-  const loadUserAndNotices = async () => {
+  const loadUserAndNotices = async (isRefresh = false) => {
     try {
       setLoading(true);
+      setRefreshing(isRefresh);
+      setErrorMessage(null);
       const storedData = await AsyncStorage.getItem('userData');
       if (storedData) {
         const user = JSON.parse(storedData);
@@ -59,23 +65,30 @@ export default function NoticesScreen({ navigation }: any) {
       if (selectedBarrio && selectedBarrio !== 'Todo Lules') {
         params.append('barrio', selectedBarrio);
       }
+      if (selectedSource !== 'TODOS') {
+        params.append('sourceType', selectedSource);
+      }
 
       const queryString = params.toString() ? `?${params.toString()}` : '';
-      const response = await fetch(`${BASE_URL}/notices${queryString}`);
+      const response = await fetchWithTimeout(`${BASE_URL}/notices${queryString}`);
 
-      if (response.ok) {
-        let data = await response.json();
-        
-        if (selectedSeverity !== 'TODOS') {
-          data = data.filter((item: any) => item.severity === selectedSeverity);
-        }
-
-        setNotices(data);
+      if (!response.ok) {
+        throw new Error(`El servidor respondió con estado ${response.status}.`);
       }
+
+      let data = await response.json();
+
+      if (selectedSeverity !== 'TODOS') {
+        data = data.filter((item: any) => item.severity === selectedSeverity);
+      }
+
+      setNotices(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error cargando avisos:', error);
+      setErrorMessage('No se pudieron cargar los avisos. Inténtalo nuevamente.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -193,6 +206,13 @@ export default function NoticesScreen({ navigation }: any) {
             <Text style={styles.shareBtnText}>Compartir</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={styles.detailBtn}
+          onPress={() => setSelectedNotice(item)}
+        >
+          <Ionicons name="open-outline" size={16} color="#264653" />
+          <Text style={styles.detailBtnText}>Ver detalle completo</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -269,11 +289,36 @@ export default function NoticesScreen({ navigation }: any) {
             </TouchableOpacity>
           ))}
         </View>
+        <View style={styles.sourceFilterRow}>
+          {[
+            { key: 'TODOS', label: 'Todos' },
+            { key: 'OFICIAL', label: 'Oficiales' },
+            { key: 'VECINAL', label: 'Vecinales' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.sourceTab, selectedSource === tab.key && styles.sourceTabActive]}
+              onPress={() => setSelectedSource(tab.key as typeof selectedSource)}
+            >
+              <Text style={[styles.sourceTabText, selectedSource === tab.key && styles.sourceTabTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#E63946" />
+        </View>
+      ) : errorMessage ? (
+        <View style={styles.centerContainer}>
+          <Ionicons name="cloud-offline-outline" size={60} color="#ccc" />
+          <Text style={styles.emptyText}>{errorMessage}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void loadUserAndNotices()}>
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       ) : notices.length === 0 ? (
         <View style={styles.centerContainer}>
@@ -287,6 +332,13 @@ export default function NoticesScreen({ navigation }: any) {
           renderItem={renderNoticeCard}
           contentContainerStyle={[styles.listContainer, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void loadUserAndNotices(true)}
+              colors={['#E63946']}
+            />
+          }
         />
       )}
 
@@ -333,6 +385,56 @@ export default function NoticesScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={Boolean(selectedNotice)} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailModalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detalle del aviso</Text>
+              <TouchableOpacity onPress={() => setSelectedNotice(null)}>
+                <Ionicons name="close-circle" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+            {selectedNotice ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.noticeTitle}>{selectedNotice.title}</Text>
+                <Text style={styles.detailIssuer}>{selectedNotice.issuer}</Text>
+                <Text style={styles.detailDate}>{formatDate(selectedNotice.createdAt)}</Text>
+                <Text style={styles.detailDescription}>{selectedNotice.description}</Text>
+                {selectedNotice.address ? (
+                  <Text style={styles.detailMeta}>Ubicación: {selectedNotice.address}</Text>
+                ) : null}
+                <Text style={styles.detailMeta}>Zona: {selectedNotice.barrio}</Text>
+                {selectedNotice.imageUrl ? (
+                  <Image
+                    source={{ uri: `${BASE_URL}${selectedNotice.imageUrl}` }}
+                    style={styles.detailImage}
+                    resizeMode="contain"
+                  />
+                ) : null}
+                <View style={styles.detailActions}>
+                  {selectedNotice.latitude && selectedNotice.longitude ? (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => {
+                        setSelectedNotice(null);
+                        handleViewOnMap(selectedNotice);
+                      }}
+                    >
+                      <Ionicons name="map-outline" size={16} color="#264653" />
+                      <Text style={styles.actionBtnText}>Ver en mapa</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity style={styles.shareBtn} onPress={() => void handleShare(selectedNotice)}>
+                    <Ionicons name="share-social-outline" size={16} color="#666" />
+                    <Text style={styles.shareBtnText}>Compartir</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -352,8 +454,15 @@ const styles = StyleSheet.create({
   typeTabActive: { backgroundColor: '#333' },
   typeTabText: { fontSize: 12, color: '#666', fontWeight: '600' },
   typeTabTextActive: { color: '#fff' },
+  sourceFilterRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
+  sourceTab: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginHorizontal: 3, backgroundColor: '#f0f2f5' },
+  sourceTabActive: { backgroundColor: '#264653' },
+  sourceTabText: { fontSize: 12, color: '#666', fontWeight: '600' },
+  sourceTabTextActive: { color: '#fff' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25 },
   emptyText: { fontSize: 15, color: '#666', marginTop: 15, textAlign: 'center' },
+  retryButton: { backgroundColor: '#E63946', borderRadius: 8, paddingHorizontal: 22, paddingVertical: 10, marginTop: 16 },
+  retryButtonText: { color: '#fff', fontWeight: 'bold' },
   listContainer: { padding: 15 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 15, borderLeftWidth: 5, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
@@ -376,10 +485,19 @@ const styles = StyleSheet.create({
   actionBtnText: { fontSize: 12, fontWeight: 'bold', color: '#264653', marginLeft: 5 },
   shareBtn: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 6 },
   shareBtnText: { fontSize: 12, color: '#666', fontWeight: '600', marginLeft: 4 },
+  detailBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10, marginTop: 10 },
+  detailBtnText: { color: '#264653', fontWeight: '700', marginLeft: 5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '75%' },
+  detailModalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  detailIssuer: { color: '#264653', fontWeight: '700', marginTop: 8, textTransform: 'uppercase' },
+  detailDate: { color: '#777', marginTop: 4 },
+  detailDescription: { color: '#333', fontSize: 16, lineHeight: 24, marginTop: 18 },
+  detailMeta: { color: '#555', marginTop: 12 },
+  detailImage: { width: '100%', height: 220, marginTop: 18, borderRadius: 10 },
+  detailActions: { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
   searchInput: { backgroundColor: '#f0f2f5', borderRadius: 10, paddingHorizontal: 15, height: 45, fontSize: 15, marginBottom: 15, color: '#333' },
   barrioOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   barrioOptionText: { fontSize: 16, color: '#333', marginLeft: 12 },
