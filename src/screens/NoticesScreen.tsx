@@ -41,6 +41,7 @@ export default function NoticesScreen({ navigation }: any) {
   const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
   
   const [barrioModalVisible, setBarrioModalVisible] = useState(false);
+  const [sourceModalVisible, setSourceModalVisible] = useState(false);
   const [searchBarrio, setSearchBarrio] = useState('');
 
   useFocusEffect(
@@ -283,41 +284,47 @@ export default function NoticesScreen({ navigation }: any) {
           </TouchableOpacity>
         </ScrollView>
 
-        <View style={styles.typeFilterRow}>
-          {[
-            { key: 'TODOS', label: 'Todos' },
-            { key: 'CRITICAL', label: '🚨 Urgentes' },
-            { key: 'WARNING', label: '⚠️ Precaución' },
-            { key: 'INFO', label: 'ℹ️ Informativos' },
-          ].map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.typeTab, selectedSeverity === tab.key && styles.typeTabActive]}
-              onPress={() => setSelectedSeverity(tab.key as any)}
-            >
-              <Text style={[styles.typeTabText, selectedSeverity === tab.key && styles.typeTabTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.sourceFilterRow}>
-          {[
-            { key: 'TODOS', label: 'Todos' },
-            { key: 'OFICIAL', label: 'Oficiales' },
-            { key: 'VECINAL', label: 'Vecinales' },
-          ].map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.sourceTab, selectedSource === tab.key && styles.sourceTabActive]}
-              onPress={() => setSelectedSource(tab.key as typeof selectedSource)}
-            >
-              <Text style={[styles.sourceTabText, selectedSource === tab.key && styles.sourceTabTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.severityFilterScroll}
+          contentContainerStyle={styles.severityFilterContent}
+        >
+          <View style={styles.typeFilterRow}>
+            {[
+              { key: 'TODOS', label: 'Todos' },
+              { key: 'CRITICAL', label: '🚨 Urgentes' },
+              { key: 'WARNING', label: '⚠️ Precaución' },
+              { key: 'INFO', label: 'ℹ️ Informativos' },
+            ].map((tab) => (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.typeTab, selectedSeverity === tab.key && styles.typeTabActive]}
+                onPress={() => setSelectedSeverity(tab.key as any)}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[styles.typeTabText, selectedSeverity === tab.key && styles.typeTabTextActive]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[styles.sourceButton, selectedSource !== 'TODOS' && styles.sourceButtonActive]}
+            onPress={() => setSourceModalVisible(true)}
+          >
+            <Ionicons
+              name="options-outline"
+              size={14}
+              color={selectedSource !== 'TODOS' ? '#fff' : '#264653'}
+            />
+            <Text style={[styles.sourceButtonText, selectedSource !== 'TODOS' && styles.sourceButtonTextActive]}>
+              {selectedSource === 'TODOS' ? 'Origen' : selectedSource === 'OFICIAL' ? 'Oficial' : 'Vecinal'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {loading ? (
@@ -398,6 +405,42 @@ export default function NoticesScreen({ navigation }: any) {
         </View>
       </Modal>
 
+      <Modal visible={sourceModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filtrar por origen</Text>
+              <TouchableOpacity onPress={() => setSourceModalVisible(false)}>
+                <Ionicons name="close-circle" size={28} color="#666" />
+              </TouchableOpacity>
+            </View>
+            {[
+              { key: 'TODOS', label: 'Todos los avisos' },
+              { key: 'OFICIAL', label: 'Avisos oficiales' },
+              { key: 'VECINAL', label: 'Avisos vecinales' },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                style={styles.barrioOption}
+                onPress={() => {
+                  setSelectedSource(option.key as typeof selectedSource);
+                  setSourceModalVisible(false);
+                }}
+              >
+                <Ionicons
+                  name={selectedSource === option.key ? 'radio-button-on' : 'radio-button-off'}
+                  size={20}
+                  color={selectedSource === option.key ? '#E63946' : '#888'}
+                />
+                <Text style={[styles.barrioOptionText, selectedSource === option.key && { fontWeight: 'bold', color: '#E63946' }]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={Boolean(selectedNotice)} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.detailModalContainer}>
@@ -461,16 +504,17 @@ const styles = StyleSheet.create({
   zoneChipActive: { backgroundColor: '#E63946', borderColor: '#E63946' },
   zoneChipText: { fontSize: 13, color: '#333', fontWeight: '600', marginLeft: 5 },
   zoneChipTextActive: { color: '#fff' },
-  typeFilterRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  typeTab: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 8, marginHorizontal: 2, backgroundColor: '#f8f9fa' },
+  typeTab: { minWidth: 92, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderRadius: 8, marginRight: 6, backgroundColor: '#f8f9fa' },
   typeTabActive: { backgroundColor: '#333' },
   typeTabText: { fontSize: 12, color: '#666', fontWeight: '600' },
   typeTabTextActive: { color: '#fff' },
-  sourceFilterRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
-  sourceTab: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginHorizontal: 3, backgroundColor: '#f0f2f5' },
-  sourceTabActive: { backgroundColor: '#264653' },
-  sourceTabText: { fontSize: 12, color: '#666', fontWeight: '600' },
-  sourceTabTextActive: { color: '#fff' },
+  severityFilterScroll: { marginTop: 8 },
+  severityFilterContent: { alignItems: 'center', paddingRight: 4 },
+  typeFilterRow: { flexDirection: 'row', alignItems: 'center' },
+  sourceButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginLeft: 6, backgroundColor: '#eef4f7' },
+  sourceButtonActive: { backgroundColor: '#264653' },
+  sourceButtonText: { fontSize: 12, color: '#264653', fontWeight: '700', marginLeft: 4 },
+  sourceButtonTextActive: { color: '#fff' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25 },
   emptyText: { fontSize: 15, color: '#666', marginTop: 15, textAlign: 'center' },
   retryButton: { backgroundColor: '#E63946', borderRadius: 8, paddingHorizontal: 22, paddingVertical: 10, marginTop: 16 },

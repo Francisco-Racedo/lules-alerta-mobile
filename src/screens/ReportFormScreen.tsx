@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { BASE_URL } from '../services/auth';
 
 const MAX_IMAGES = 5;
@@ -39,10 +40,37 @@ export default function ReportFormScreen({ route, navigation }: any) {
   >([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const lat = location?.coords?.latitude || location?.latitude || -26.9358;
-  const lng = location?.coords?.longitude || location?.longitude || -65.3288;
-  const addressText =
-    location?.address || 'Av. Ramón B. Ortega 1048, Lules';
+  const lat = location?.coords?.latitude ?? location?.latitude;
+  const lng = location?.coords?.longitude ?? location?.longitude;
+  const addressText = location?.address || 'Ubicación GPS actual';
+
+  const getCurrentAddress = async (
+    latitude: number,
+    longitude: number,
+  ): Promise<string> => {
+    try {
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+
+      if (!place) {
+        return addressText;
+      }
+
+      const street = [place.street, place.name]
+        .filter((value, index, values) => value && values.indexOf(value) === index)
+        .join(' ');
+      const address = [street, place.streetNumber, place.city]
+        .filter(Boolean)
+        .join(' ');
+
+      return address || addressText;
+    } catch (error) {
+      console.warn('No se pudo obtener la dirección del reporte:', error);
+      return addressText;
+    }
+  };
 
   const handlePickImage = async () => {
   const remainingSlots = MAX_IMAGES - selectedImages.length;
@@ -179,6 +207,15 @@ export default function ReportFormScreen({ route, navigation }: any) {
     return;
   }
 
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    Toast.show({
+      type: 'error',
+      text1: 'Ubicación no disponible',
+      text2: 'Activa el GPS para enviar el reporte.',
+    });
+    return;
+  }
+
   setIsSubmitting(true);
 
   try {
@@ -203,7 +240,7 @@ export default function ReportFormScreen({ route, navigation }: any) {
     formData.append('latitude', String(lat));
     formData.append('longitude', String(lng));
     formData.append('userId', String(user.id));
-    formData.append('address', addressText);
+    formData.append('address', await getCurrentAddress(lat, lng));
 
     selectedImages.forEach((asset, index) => {
       const imageFile: ReactNativeFormDataFile = {
