@@ -8,18 +8,30 @@ export default function HomeScreen({ route, navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedFocusLocation, setSelectedFocusLocation] = useState(
+    route.params?.focusLocation ?? null,
+  );
 
   // Recibimos parámetros externos si el usuario presionó "Ver en Mapa" desde un aviso
-  const focusLocation = route.params?.focusLocation;
+  const focusLocation =
+    selectedFocusLocation ?? route.params?.focusLocation ?? null;
 
   // NUEVO: Escuchamos la señal de radio silenciosa para abrir el modal sin recargar
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('reopenCategoryModal', () => {
       setModalVisible(true);
     });
-    
+
+    const focusSubscription = DeviceEventEmitter.addListener(
+      'focusNoticeLocation',
+      (nextFocusLocation) => {
+        setSelectedFocusLocation(nextFocusLocation);
+      },
+    );
+
     return () => {
       subscription.remove();
+      focusSubscription.remove();
     };
   }, []);
 

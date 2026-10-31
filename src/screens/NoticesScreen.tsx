@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
-  Modal, TextInput, ScrollView, Linking, Share, Image, RefreshControl
+  Modal, TextInput, ScrollView, Linking, Share, Image, RefreshControl,
+  DeviceEventEmitter
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,7 +29,7 @@ const BARRIOS_LULES = [
 
 export default function NoticesScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
-  const [notices, setNotices] = useState<any[]>([]);
+  const [allNotices, setAllNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export default function NoticesScreen({ navigation }: any) {
   useFocusEffect(
     React.useCallback(() => {
       void loadUserAndNotices();
-    }, [selectedBarrio, selectedSeverity, selectedSource])
+    }, [selectedBarrio, selectedSource])
   );
 
   const loadUserAndNotices = async (isRefresh = false) => {
@@ -78,11 +79,7 @@ export default function NoticesScreen({ navigation }: any) {
 
       let data = await response.json();
 
-      if (selectedSeverity !== 'TODOS') {
-        data = data.filter((item: any) => item.severity === selectedSeverity);
-      }
-
-      setNotices(Array.isArray(data) ? data : []);
+      setAllNotices(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error cargando avisos:', error);
       setErrorMessage('No se pudieron cargar los avisos. Inténtalo nuevamente.');
@@ -91,6 +88,13 @@ export default function NoticesScreen({ navigation }: any) {
       setRefreshing(false);
     }
   };
+
+  const notices = useMemo(
+    () => selectedSeverity === 'TODOS'
+      ? allNotices
+      : allNotices.filter((item) => item.severity === selectedSeverity),
+    [allNotices, selectedSeverity],
+  );
 
   const getSeverityStyles = (severity: string) => {
     switch (severity) {
@@ -115,14 +119,22 @@ export default function NoticesScreen({ navigation }: any) {
   };
 
   const handleViewOnMap = (item: any) => {
-    navigation.navigate('Mapa', {
-      focusLocation: {
-        latitude: item.latitude,
-        longitude: item.longitude,
-        title: item.title,
-        address: item.address,
-      }
-    });
+    const latitude = Number(item.latitude);
+    const longitude = Number(item.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+
+    const focusLocation = {
+      latitude,
+      longitude,
+      title: item.title,
+      address: item.address,
+    };
+
+    DeviceEventEmitter.emit('focusNoticeLocation', focusLocation);
+    navigation.navigate('Mapa', { focusLocation });
   };
 
   const handleShare = async (item: any) => {
