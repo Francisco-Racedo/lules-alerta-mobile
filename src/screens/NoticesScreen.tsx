@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
   Modal, TextInput, ScrollView, Linking, Share, Image, RefreshControl,
-  DeviceEventEmitter
+  DeviceEventEmitter, BackHandler
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -39,6 +39,8 @@ export default function NoticesScreen({ navigation }: any) {
   const [selectedSeverity, setSelectedSeverity] = useState<'TODOS' | 'CRITICAL' | 'WARNING' | 'INFO'>('TODOS');
   const [selectedSource, setSelectedSource] = useState<'TODOS' | 'OFICIAL' | 'VECINAL'>('TODOS');
   const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [readNoticeIds, setReadNoticeIds] = useState<Set<string>>(new Set());
   
   const [barrioModalVisible, setBarrioModalVisible] = useState(false);
   const [sourceModalVisible, setSourceModalVisible] = useState(false);
@@ -49,6 +51,32 @@ export default function NoticesScreen({ navigation }: any) {
       void loadUserAndNotices();
     }, [selectedBarrio, selectedSource])
   );
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (selectedNotice) {
+          setSelectedNotice(null);
+          return true;
+        }
+
+        if (sourceModalVisible) {
+          setSourceModalVisible(false);
+          return true;
+        }
+
+        if (barrioModalVisible) {
+          setBarrioModalVisible(false);
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    return () => subscription.remove();
+  }, [barrioModalVisible, selectedNotice, sourceModalVisible]);
 
   const loadUserAndNotices = async (isRefresh = false) => {
     try {
@@ -81,6 +109,22 @@ export default function NoticesScreen({ navigation }: any) {
       let data = await response.json();
 
       setAllNotices(Array.isArray(data) ? data : []);
+
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        const readResponse = await fetchWithTimeout(`${BASE_URL}/notices/read`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!readResponse.ok) {
+          throw new Error(`No se pudo cargar el estado de lectura (${readResponse.status}).`);
+        }
+
+        const readIds: unknown = await readResponse.json();
+        if (!Array.isArray(readIds) || !readIds.every((id) => typeof id === 'string')) {
+          throw new Error('La respuesta de lectura no es válida.');
+        }
+        setReadNoticeIds(new Set(readIds));
+      }
     } catch (error) {
       console.error('Error cargando avisos:', error);
       setErrorMessage('No se pudieron cargar los avisos. Inténtalo nuevamente.');
@@ -148,15 +192,43 @@ export default function NoticesScreen({ navigation }: any) {
     }
   };
 
+  const markNoticeAsRead = async (noticeId: string) => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token || readNoticeIds.has(noticeId)) {
+      return;
+    }
+
+    const response = await fetchWithTimeout(`${BASE_URL}/notices/${noticeId}/read`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error(`No se pudo marcar el aviso como leído (${response.status}).`);
+    }
+
+    setReadNoticeIds((current) => {
+      const next = new Set(current);
+      next.add(noticeId);
+      return next;
+    });
+  };
+
   const filteredBarriosList = BARRIOS_LULES.filter((b) =>
     b.toLowerCase().includes(searchBarrio.toLowerCase())
   );
 
   const renderNoticeCard = ({ item }: { item: any }) => {
     const sev = getSeverityStyles(item.severity);
+    const noticeImages = Array.isArray(item.images) && item.images.length > 0
+      ? item.images
+      : item.imageUrl
+        ? [item.imageUrl]
+        : [];
+
+    const isUnread = !readNoticeIds.has(item.id);
 
     return (
-      <View style={[styles.card, { borderLeftColor: sev.color }]}>
+      <View style={[styles.card, { borderLeftColor: sev.color }, isUnread && styles.unreadCard]}>
         <View style={styles.cardTopRow}>
           <View style={styles.issuerContainer}>
             <Ionicons 
@@ -173,7 +245,10 @@ export default function NoticesScreen({ navigation }: any) {
           </View>
         </View>
 
-        <Text style={styles.noticeTitle}>{item.title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.noticeTitle}>{item.title}</Text>
+          {isUnread ? <Text style={styles.unreadLabel}>NUEVO</Text> : null}
+        </View>
         
         <View style={styles.metaRow}>
           <View style={styles.barrioBadge}>
@@ -192,9 +267,9 @@ export default function NoticesScreen({ navigation }: any) {
 
         <Text style={styles.descriptionText}>{item.description}</Text>
 
-        {item.imageUrl ? (
+        {noticeImages.length > 0 ? (
           <Image 
-            source={{ uri: `${BASE_URL}${item.imageUrl}` }} 
+            source={{ uri: `${BASE_URL}${noticeImages[0]}` }}
             style={styles.noticeImage} 
           />
         ) : null}
@@ -221,7 +296,13 @@ export default function NoticesScreen({ navigation }: any) {
         </View>
         <TouchableOpacity
           style={styles.detailBtn}
-          onPress={() => setSelectedNotice(item)}
+          onPress={() => {
+            setSelectedImageIndex(0);
+            setSelectedNotice(item);
+            void markNoticeAsRead(item.id).catch((error) => {
+              console.error('Error marcando aviso como leído:', error);
+            });
+          }}
         >
           <Ionicons name="open-outline" size={16} color="#264653" />
           <Text style={styles.detailBtnText}>Ver detalle completo</Text>
@@ -361,7 +442,12 @@ export default function NoticesScreen({ navigation }: any) {
         />
       )}
 
-      <Modal visible={barrioModalVisible} animationType="slide" transparent>
+      <Modal
+        visible={barrioModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setBarrioModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
@@ -405,7 +491,12 @@ export default function NoticesScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      <Modal visible={sourceModalVisible} animationType="slide" transparent>
+      <Modal
+        visible={sourceModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSourceModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
@@ -441,7 +532,12 @@ export default function NoticesScreen({ navigation }: any) {
         </View>
       </Modal>
 
-      <Modal visible={Boolean(selectedNotice)} animationType="slide" transparent>
+      <Modal
+        visible={Boolean(selectedNotice)}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedNotice(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.detailModalContainer}>
             <View style={styles.modalHeader}>
@@ -452,6 +548,39 @@ export default function NoticesScreen({ navigation }: any) {
             </View>
             {selectedNotice ? (
               <ScrollView showsVerticalScrollIndicator={false}>
+                {(() => {
+                  const noticeImages = Array.isArray(selectedNotice.images) && selectedNotice.images.length > 0
+                    ? selectedNotice.images
+                    : selectedNotice.imageUrl
+                      ? [selectedNotice.imageUrl]
+                      : [];
+                  return noticeImages.length > 0 ? (
+                    <>
+                      <Image
+                        source={{ uri: `${BASE_URL}${noticeImages[selectedImageIndex]}` }}
+                        style={styles.detailImage}
+                        resizeMode="contain"
+                      />
+                      {noticeImages.length > 1 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
+                          {noticeImages.map((imageUrl: string, index: number) => (
+                            <TouchableOpacity
+                              key={imageUrl}
+                              onPress={() => setSelectedImageIndex(index)}
+                              style={[styles.thumbnailButton, index === selectedImageIndex && styles.thumbnailButtonActive]}
+                            >
+                              <Image
+                                source={{ uri: `${BASE_URL}${imageUrl}` }}
+                                style={styles.thumbnailImage}
+                                resizeMode="cover"
+                              />
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      ) : null}
+                    </>
+                  ) : null;
+                })()}
                 <Text style={styles.noticeTitle}>{selectedNotice.title}</Text>
                 <Text style={styles.detailIssuer}>{selectedNotice.issuer}</Text>
                 <Text style={styles.detailDate}>{formatDate(selectedNotice.createdAt)}</Text>
@@ -460,13 +589,6 @@ export default function NoticesScreen({ navigation }: any) {
                   <Text style={styles.detailMeta}>Ubicación: {selectedNotice.address}</Text>
                 ) : null}
                 <Text style={styles.detailMeta}>Zona: {selectedNotice.barrio}</Text>
-                {selectedNotice.imageUrl ? (
-                  <Image
-                    source={{ uri: `${BASE_URL}${selectedNotice.imageUrl}` }}
-                    style={styles.detailImage}
-                    resizeMode="contain"
-                  />
-                ) : null}
                 <View style={styles.detailActions}>
                   {selectedNotice.latitude && selectedNotice.longitude ? (
                     <TouchableOpacity
@@ -521,12 +643,15 @@ const styles = StyleSheet.create({
   retryButtonText: { color: '#fff', fontWeight: 'bold' },
   listContainer: { padding: 15 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 15, borderLeftWidth: 5, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  unreadCard: { backgroundColor: '#fffaf0' },
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   issuerContainer: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   issuerText: { fontSize: 12, fontWeight: '700', color: '#264653', marginLeft: 5, textTransform: 'uppercase' },
   severityBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   severityText: { fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
   noticeTitle: { fontSize: 17, fontWeight: 'bold', color: '#222', marginBottom: 6 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  unreadLabel: { color: '#E63946', fontSize: 10, fontWeight: 'bold', marginTop: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   barrioBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff0f0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   barrioBadgeText: { fontSize: 12, fontWeight: '600', color: '#E63946', marginLeft: 3 },
@@ -553,6 +678,10 @@ const styles = StyleSheet.create({
   detailDescription: { color: '#333', fontSize: 16, lineHeight: 24, marginTop: 18 },
   detailMeta: { color: '#555', marginTop: 12 },
   detailImage: { width: '100%', height: 220, marginTop: 18, borderRadius: 10 },
+  thumbnailRow: { marginTop: 10, marginBottom: 8 },
+  thumbnailButton: { marginRight: 8, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
+  thumbnailButtonActive: { borderColor: '#E63946' },
+  thumbnailImage: { width: 64, height: 64, borderRadius: 6 },
   detailActions: { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
   searchInput: { backgroundColor: '#f0f2f5', borderRadius: 10, paddingHorizontal: 15, height: 45, fontSize: 15, marginBottom: 15, color: '#333' },
   barrioOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
