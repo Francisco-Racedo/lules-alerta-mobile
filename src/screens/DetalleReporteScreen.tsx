@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator, Linking, Platform, Modal, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator, Linking, Platform, Modal, ScrollView, Dimensions, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -7,12 +7,31 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import MapView, { Marker } from 'react-native-maps';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { FileSystemUploadType } from 'expo-file-system/legacy';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import { BASE_URL } from '../services/auth';
+import type { ReportItem } from '../types/reports';
 
 const { width: screenWidth } = Dimensions.get('window');
+const REPORT_CHANGED_EVENT = 'reportChanged';
 
-export default function DetalleReporteScreen({ route, navigation }: any) {
+type DetailRoute = {
+  params: {
+    report: ReportItem;
+  };
+};
+
+type DetailNavigation = {
+  goBack: () => void;
+};
+
+export default function DetalleReporteScreen({
+  route,
+  navigation,
+}: {
+  route: DetailRoute;
+  navigation: DetailNavigation;
+}) {
   const { report } = route.params;
   const insets = useSafeAreaInsets();
   const [isEditing, setIsEditing] = useState(false);
@@ -96,7 +115,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
       imageUri,
       {
         httpMethod: 'PATCH',
-        uploadType: 1 as any,
+        uploadType: FileSystemUploadType.MULTIPART,
         fieldName: 'file',
         mimeType: type,
       },
@@ -117,6 +136,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
         : [];
 
     setCurrentImages(updatedImages);
+    DeviceEventEmitter.emit(REPORT_CHANGED_EVENT, report.id);
 
     Toast.show({
       type: 'success',
@@ -210,6 +230,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
       if (!response.ok) throw new Error('Error al actualizar');
       setCurrentDescription(editedDescription.trim());
       setIsEditing(false);
+      DeviceEventEmitter.emit(REPORT_CHANGED_EVENT, report.id);
       Toast.show({ type: 'success', text1: 'Actualizado', text2: 'La descripción fue guardada con éxito.', position: 'top' });
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Error de Red', text2: 'No se pudo actualizar el reporte.', position: 'top' });
@@ -228,6 +249,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
           try {
             const response = await fetch(`${BASE_URL}/alerts/${report.id}`, { method: 'DELETE' });
             if (!response.ok) throw new Error('Error al eliminar');
+            DeviceEventEmitter.emit(REPORT_CHANGED_EVENT, report.id);
             Toast.show({ type: 'success', text1: 'Cancelado', text2: 'El reporte fue eliminado correctamente.', position: 'top' });
             navigation.goBack();
           } catch (error) {
@@ -249,6 +271,7 @@ export default function DetalleReporteScreen({ route, navigation }: any) {
           try {
             const response = await fetch(`${BASE_URL}/alerts/${report.id}/archive`, { method: 'PATCH' });
             if (!response.ok) throw new Error('Error al archivar');
+            DeviceEventEmitter.emit(REPORT_CHANGED_EVENT, report.id);
             Toast.show({ type: 'success', text1: 'Archivado', text2: 'El reporte fue ocultado correctamente.', position: 'top' });
             navigation.goBack();
           } catch (error) {

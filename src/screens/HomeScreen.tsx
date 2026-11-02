@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as IntentLauncher from 'expo-intent-launcher';
 
+const LOCATION_REQUEST_TIMEOUT_MS = 10000;
+
 export default function HomeScreen({ route, navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -74,9 +76,21 @@ export default function HomeScreen({ route, navigation }: any) {
         return;
       }
 
-      const currentPosition = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const currentPosition = await new Promise<Location.LocationObject>(
+        (resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(
+              new Error('La solicitud de ubicación agotó el tiempo de espera.'),
+            );
+          }, LOCATION_REQUEST_TIMEOUT_MS);
+
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          }).then(resolve, reject).finally(() => {
+            clearTimeout(timeoutId);
+          });
+        },
+      );
       locationRef.current = currentPosition;
       setLocation(currentPosition);
     } catch (error) {

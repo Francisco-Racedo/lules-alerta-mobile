@@ -21,9 +21,10 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import MyReportsScreen from '../screens/MyReportsScreen';
 import NoticesScreen from '../screens/NoticesScreen';
 import DetalleReporteScreen from '../screens/DetalleReporteScreen';
+import type { RootStackParamList } from './navigation.types';
 
 const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const PlaceholderScreen = ({ title }: { title: string }) => (
   <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -72,7 +73,8 @@ function TabNavigator() {
 
 export default function AppNavigator() {
   const [isLoading, setIsLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState('Login');
+  const [initialRoute, setInitialRoute] =
+    useState<keyof RootStackParamList>('Login');
 
   useEffect(() => {
     const checkLoginStatus = async () => {

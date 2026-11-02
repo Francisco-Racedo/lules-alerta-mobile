@@ -451,7 +451,12 @@ export default function NoticesScreen({ navigation }: any) {
           Comunicados oficiales y alertas de Lules
         </Text>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.barrioFilterScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.barrioFilterScroll}
+          contentContainerStyle={styles.barrioFilterContent}
+        >
           <TouchableOpacity
             style={[styles.zoneChip, selectedBarrio === 'Todo Lules' && styles.zoneChipActive]}
             onPress={() => setSelectedBarrio('Todo Lules')}
@@ -525,38 +530,38 @@ export default function NoticesScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
-          <TouchableOpacity
-            style={[styles.sourceButton, selectedSource !== 'TODOS' && styles.sourceButtonActive]}
-            onPress={() => setSourceModalVisible(true)}
-          >
-            <Ionicons
-              name="options-outline"
-              size={14}
-              color={selectedSource !== 'TODOS' ? '#fff' : '#264653'}
-            />
-            <Text style={[styles.sourceButtonText, selectedSource !== 'TODOS' && styles.sourceButtonTextActive]}>
-              {selectedSource === 'TODOS' ? 'Origen' : selectedSource === 'OFICIAL' ? 'Oficial' : 'Vecinal'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.unreadFilterButton, unreadOnly && styles.unreadFilterButtonActive]}
-            onPress={() => setUnreadOnly((current) => !current)}
-          >
-            <Ionicons
-              name={unreadOnly ? 'mail-unread' : 'mail-unread-outline'}
-              size={14}
-              color={unreadOnly ? '#fff' : '#264653'}
-            />
-            <Text
-              style={[
-                styles.unreadFilterButtonText,
-                unreadOnly && styles.unreadFilterButtonTextActive,
-              ]}
+            <TouchableOpacity
+              style={[styles.sourceButton, selectedSource !== 'TODOS' && styles.sourceButtonActive]}
+              onPress={() => setSourceModalVisible(true)}
             >
-              Sin leer ({unreadNoticeCount})
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name="options-outline"
+                size={14}
+                color={selectedSource !== 'TODOS' ? '#fff' : '#264653'}
+              />
+              <Text style={[styles.sourceButtonText, selectedSource !== 'TODOS' && styles.sourceButtonTextActive]}>
+                {selectedSource === 'TODOS' ? 'Origen' : selectedSource === 'OFICIAL' ? 'Oficial' : 'Vecinal'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.unreadFilterButton, unreadOnly && styles.unreadFilterButtonActive]}
+              onPress={() => setUnreadOnly((current) => !current)}
+            >
+              <Ionicons
+                name={unreadOnly ? 'mail-unread' : 'mail-unread-outline'}
+                size={14}
+                color={unreadOnly ? '#fff' : '#264653'}
+              />
+              <Text
+                style={[
+                  styles.unreadFilterButtonText,
+                  unreadOnly && styles.unreadFilterButtonTextActive,
+                ]}
+              >
+                Sin leer ({unreadNoticeCount})
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </View>
 
@@ -843,6 +848,7 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: '#666', flex: 1 },
   tabBarBadge: { backgroundColor: '#E63946', color: '#fff', fontSize: 10, fontWeight: '700' },
   barrioFilterScroll: { marginTop: 14, marginBottom: 10 },
+  barrioFilterContent: { paddingHorizontal: 2 },
   zoneChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f2f5', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#e0e0e0' },
   zoneChipActive: { backgroundColor: '#E63946', borderColor: '#E63946' },
   zoneChipText: { fontSize: 13, color: '#333', fontWeight: '600', marginLeft: 5 },
@@ -852,7 +858,7 @@ const styles = StyleSheet.create({
   typeTabText: { fontSize: 12, color: '#666', fontWeight: '600' },
   typeTabTextActive: { color: '#fff' },
   severityFilterScroll: { marginTop: 8 },
-  severityFilterContent: { alignItems: 'center', paddingRight: 4 },
+  severityFilterContent: { paddingHorizontal: 2 },
   typeFilterRow: { flexDirection: 'row', alignItems: 'center' },
   sourceButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginLeft: 6, backgroundColor: '#eef4f7' },
   sourceButtonActive: { backgroundColor: '#264653' },
