@@ -10,10 +10,11 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { FileSystemUploadType } from 'expo-file-system/legacy';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import { BASE_URL } from '../services/auth';
-import type { ReportItem } from '../types/reports';
+import type { ReportHistoryEvent, ReportItem, ReportStatus } from '../types/reports';
 
 const { width: screenWidth } = Dimensions.get('window');
 const REPORT_CHANGED_EVENT = 'reportChanged';
+const ARGENTINA_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 
 type DetailRoute = {
   params: {
@@ -57,9 +58,46 @@ export default function DetalleReporteScreen({
   const isPending = report.status === 'PENDING';
   const isClosed = report.status === 'RESOLVED' || report.status === 'DISMISSED';
 
-  const timelineEvents = Array.isArray(report.history) 
-    ? [...report.history].sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
-    : [];
+  const timelineEvents = [
+    ...(Array.isArray(report.history)
+      ? report.history.map((event) => ({
+          type: 'status' as const,
+          event,
+          date: event.changedAt,
+        }))
+      : []),
+    ...(report.archivedAt
+      ? [{
+          type: 'archived' as const,
+          event: null,
+          date: report.archivedAt,
+        }]
+      : []),
+  ].sort(
+    (first, second) =>
+      new Date(second.date).getTime() - new Date(first.date).getTime(),
+  );
+
+  const getTimelineTitle = (event: ReportHistoryEvent) => {
+    if (event.previousStatus) {
+      return `${getStatusText(event.previousStatus)} → ${getStatusText(event.newStatus)}`;
+    }
+
+    return getStatusText(event.newStatus);
+  };
+
+  const getTimelineIcon = (status: ReportStatus): keyof typeof Ionicons.glyphMap => {
+    switch (status) {
+      case 'RESOLVED':
+        return 'checkmark-circle';
+      case 'DISMISSED':
+        return 'close-circle';
+      case 'IN_PROGRESS':
+        return 'construct';
+      default:
+        return 'time';
+    }
+  };
 
   const handleUpdatePhoto = async (imageIndex: number) => {
   try {
@@ -211,7 +249,7 @@ export default function DetalleReporteScreen({
   };
 
   const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: ARGENTINA_TIME_ZONE };
     return new Date(dateString).toLocaleDateString('es-ES', options);
   };
 
@@ -511,16 +549,51 @@ export default function DetalleReporteScreen({
             <View style={styles.timelineWrapper}>
               <Text style={styles.timelineHeaderTitle}>Trazabilidad de Autoridades</Text>
               <View style={styles.timelineContainer}>
-                {timelineEvents.map((event, index) => (
-                  <View key={`${event.id}-${index}`} style={styles.timelineItem}>
+                {timelineEvents.map((timelineEvent, index) => (
+                  <View
+                    key={`${
+                      timelineEvent.type === 'status'
+                        ? timelineEvent.event.id
+                        : 'archived'
+                    }-${index}`}
+                    style={styles.timelineItem}
+                  >
                     <View style={styles.timelineVisuals}>
-                      <View style={[styles.timelineDot, { backgroundColor: getStatusColor(event.newStatus) }]} />
+                      {timelineEvent.type === 'status' ? (
+                        <View style={[styles.timelineDot, { backgroundColor: getStatusColor(timelineEvent.event.newStatus) }]}>
+                          <Ionicons
+                            name={getTimelineIcon(timelineEvent.event.newStatus)}
+                            size={12}
+                            color="#fff"
+                          />
+                        </View>
+                      ) : (
+                        <View style={[styles.timelineDot, styles.archivedTimelineDot]}>
+                          <Ionicons name="archive" size={12} color="#fff" />
+                        </View>
+                      )}
                       {index !== timelineEvents.length - 1 && <View style={styles.timelineLine} />}
                     </View>
                     <View style={styles.timelineContentBox}>
-                      <Text style={[styles.timelineStatusText, { color: getStatusColor(event.newStatus) }]}>{getStatusText(event.newStatus)}</Text>
-                      <Text style={styles.timelineDateText}>{formatDate(event.changedAt)}</Text>
-                      {event.comment ? <Text style={styles.timelineCommentText}>{event.comment}</Text> : null}
+                      {timelineEvent.type === 'status' ? (
+                        <>
+                          <Text style={[styles.timelineStatusText, { color: getStatusColor(timelineEvent.event.newStatus) }]}>{getTimelineTitle(timelineEvent.event)}</Text>
+                          <Text style={styles.timelineDateText}>{formatDate(timelineEvent.event.changedAt)}</Text>
+                          {timelineEvent.event.comment ? <Text style={styles.timelineCommentText}>{timelineEvent.event.comment}</Text> : null}
+                        </>
+                      ) : (
+                        <>
+                          <Text style={[styles.timelineStatusText, { color: '#264653' }]}>
+                            Reporte archivado
+                          </Text>
+                          <Text style={styles.timelineDateText}>
+                            {formatDate(timelineEvent.date)}
+                          </Text>
+                          <Text style={styles.timelineCommentText}>
+                            El reporte fue retirado de la lista de activos.
+                          </Text>
+                        </>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -637,7 +710,8 @@ const styles = StyleSheet.create({
   timelineContainer: { backgroundColor: '#fff', padding: 20, borderRadius: 12, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2 },
   timelineItem: { flexDirection: 'row', alignItems: 'flex-start' },
   timelineVisuals: { alignItems: 'center', width: 24, marginRight: 15 },
-  timelineDot: { width: 14, height: 14, borderRadius: 7, zIndex: 2 },
+  timelineDot: { width: 18, height: 18, borderRadius: 9, zIndex: 2, alignItems: 'center', justifyContent: 'center' },
+  archivedTimelineDot: { backgroundColor: '#264653' },
   timelineLine: { width: 2, backgroundColor: '#eee', flex: 1, marginTop: 4, marginBottom: 4, minHeight: 40 },
   timelineContentBox: { flex: 1, paddingBottom: 25, marginTop: -3 },
   timelineStatusText: { fontSize: 15, fontWeight: 'bold', marginBottom: 2 },

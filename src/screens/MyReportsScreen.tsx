@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { io, type Socket } from 'socket.io-client';
 import {
   BASE_URL,
   fetchWithTimeout,
@@ -32,6 +33,7 @@ type ReportsResponse = {
 type DateFilter = 'ALL' | 'TODAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'CUSTOM';
 
 const REPORT_CHANGED_EVENT = 'reportChanged';
+const REPORTS_PAGE_SIZE = 25;
 const ARGENTINA_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const ARGENTINA_UTC_OFFSET_HOURS = 3;
 
@@ -228,7 +230,7 @@ export default function MyReportsScreen({
           page: number,
         ): Promise<ReportsResponse> => {
           const response = await fetchWithTimeout(
-            `${BASE_URL}/alerts/me?page=${page}&limit=50&archived=${archived}`,
+            `${BASE_URL}/alerts/me?page=${page}&limit=${REPORTS_PAGE_SIZE}&archived=${archived}`,
             {
               headers: {
                 Authorization: 'Bearer ' + userToken,
@@ -305,7 +307,7 @@ export default function MyReportsScreen({
 
       const nextPage = currentPage + 1;
       const response = await fetchWithTimeout(
-        `${BASE_URL}/alerts/me?page=${nextPage}&limit=50&archived=${isArchived}`,
+        `${BASE_URL}/alerts/me?page=${nextPage}&limit=${REPORTS_PAGE_SIZE}&archived=${isArchived}`,
         {
           headers: {
             Authorization: 'Bearer ' + userToken,
@@ -360,6 +362,35 @@ export default function MyReportsScreen({
     loadingMore,
     refreshing,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let socket: Socket | null = null;
+
+    const connectToAlerts = async () => {
+      const userToken = await AsyncStorage.getItem('userToken');
+
+      if (!userToken || cancelled) {
+        return;
+      }
+
+      socket = io(BASE_URL, {
+        auth: { token: userToken },
+        transports: ['websocket'],
+      });
+
+      socket.on('alert.changed', () => {
+        void loadDataIndependently(false, false);
+      });
+    };
+
+    void connectToAlerts();
+
+    return () => {
+      cancelled = true;
+      socket?.disconnect();
+    };
+  }, [loadDataIndependently]);
 
   useFocusEffect(
     useCallback(() => {
