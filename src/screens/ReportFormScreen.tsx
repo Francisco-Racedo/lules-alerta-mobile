@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +21,11 @@ import * as Location from 'expo-location';
 import { BASE_URL } from '../services/auth';
 
 const MAX_IMAGES = 5;
+
+type BeforeRemoveEvent = {
+  data: { action: object };
+  preventDefault: () => void;
+};
 
 type ReactNativeFormDataFile = {
   uri: string;
@@ -39,6 +46,49 @@ export default function ReportFormScreen({ route, navigation }: any) {
     ImagePicker.ImagePickerAsset[]
   >([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const hasUnsavedChanges =
+    description.trim().length > 0 || selectedImages.length > 0;
+
+  const returnToCategorySelector = (action: object) => {
+    navigation.dispatch(action);
+    setTimeout(() => {
+      DeviceEventEmitter.emit('reopenCategoryModal');
+    }, 0);
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener(
+      'beforeRemove',
+      (event: BeforeRemoveEvent) => {
+        if (isSubmitting) {
+          return;
+        }
+
+        event.preventDefault();
+
+        if (!hasUnsavedChanges) {
+          returnToCategorySelector(event.data.action);
+          return;
+        }
+
+        Alert.alert(
+          'Salir del formulario',
+          'Se perderán los datos y fotografías cargadas. ¿Deseas salir?',
+          [
+            { text: 'Continuar aquí', style: 'cancel' },
+            {
+              text: 'Salir',
+              style: 'destructive',
+              onPress: () => returnToCategorySelector(event.data.action),
+            },
+          ],
+        );
+      },
+    );
+
+    return unsubscribe;
+  }, [hasUnsavedChanges, isSubmitting, navigation]);
 
   const lat = location?.coords?.latitude ?? location?.latitude;
   const lng = location?.coords?.longitude ?? location?.longitude;

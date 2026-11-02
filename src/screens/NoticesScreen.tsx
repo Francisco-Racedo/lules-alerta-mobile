@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import ImageViewer from 'react-native-image-zoom-viewer';
 import { BASE_URL, fetchWithTimeout } from '../services/auth';
 
 const BARRIOS_LULES = [
@@ -38,8 +39,11 @@ export default function NoticesScreen({ navigation }: any) {
   const [selectedBarrio, setSelectedBarrio] = useState<string>('Todo Lules');
   const [selectedSeverity, setSelectedSeverity] = useState<'TODOS' | 'CRITICAL' | 'WARNING' | 'INFO'>('TODOS');
   const [selectedSource, setSelectedSource] = useState<'TODOS' | 'OFICIAL' | 'VECINAL'>('TODOS');
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [galleryVisible, setGalleryVisible] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<{ url: string }[]>([]);
   const [readNoticeIds, setReadNoticeIds] = useState<Set<string>>(new Set());
   
   const [barrioModalVisible, setBarrioModalVisible] = useState(false);
@@ -56,6 +60,11 @@ export default function NoticesScreen({ navigation }: any) {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (galleryVisible) {
+          setGalleryVisible(false);
+          return true;
+        }
+
         if (selectedNotice) {
           setSelectedNotice(null);
           return true;
@@ -76,7 +85,7 @@ export default function NoticesScreen({ navigation }: any) {
     );
 
     return () => subscription.remove();
-  }, [barrioModalVisible, selectedNotice, sourceModalVisible]);
+  }, [barrioModalVisible, galleryVisible, selectedNotice, sourceModalVisible]);
 
   const loadUserAndNotices = async (isRefresh = false) => {
     try {
@@ -135,11 +144,97 @@ export default function NoticesScreen({ navigation }: any) {
   };
 
   const notices = useMemo(
-    () => selectedSeverity === 'TODOS'
-      ? allNotices
-      : allNotices.filter((item) => item.severity === selectedSeverity),
-    [allNotices, selectedSeverity],
+    () => {
+      const severityNotices = selectedSeverity === 'TODOS'
+        ? allNotices
+        : allNotices.filter((item) => item.severity === selectedSeverity);
+
+      if (!unreadOnly) {
+        return severityNotices;
+      }
+
+      return severityNotices.filter((item) => !readNoticeIds.has(item.id));
+    },
+    [allNotices, readNoticeIds, selectedSeverity, unreadOnly],
   );
+
+  const unreadNoticeCount = useMemo(
+    () => allNotices.filter((item) => !readNoticeIds.has(item.id)).length,
+    [allNotices, readNoticeIds],
+  );
+
+  const hasActiveFilters =
+    selectedBarrio !== 'Todo Lules' ||
+    selectedSeverity !== 'TODOS' ||
+    selectedSource !== 'TODOS' ||
+    unreadOnly;
+
+  const emptyState = useMemo(() => {
+    if (allNotices.length === 0) {
+      return {
+        icon: 'notifications-off-outline' as const,
+        title: 'No hay avisos activos',
+        message: 'En este momento no hay comunicados disponibles para consultar.',
+        showClearFilters: false,
+      };
+    }
+
+    if (unreadOnly && unreadNoticeCount === 0) {
+      return {
+        icon: 'checkmark-done-outline' as const,
+        title: 'No hay avisos sin leer',
+        message: 'Ya consultaste todos los avisos disponibles.',
+        showClearFilters: false,
+      };
+    }
+
+    return {
+      icon: 'filter-outline' as const,
+      title: 'No hay resultados',
+      message: hasActiveFilters
+        ? 'No hay avisos que coincidan con los filtros seleccionados.'
+        : 'No hay avisos para mostrar en este momento.',
+      showClearFilters: hasActiveFilters,
+    };
+  }, [
+    allNotices.length,
+    hasActiveFilters,
+    unreadNoticeCount,
+    unreadOnly,
+  ]);
+
+  const clearNoticeFilters = () => {
+    setSelectedBarrio('Todo Lules');
+    setSelectedSeverity('TODOS');
+    setSelectedSource('TODOS');
+    setUnreadOnly(false);
+  };
+
+  const openGallery = (images: string[], index: number) => {
+    setGalleryImages(
+      images.map((image) => ({ url: `${BASE_URL}${image}` })),
+    );
+    setSelectedImageIndex(index);
+    setGalleryVisible(true);
+  };
+
+  useEffect(() => {
+    navigation.setOptions({
+      tabBarBadge:
+        unreadNoticeCount > 0
+          ? unreadNoticeCount > 99
+            ? '99+'
+            : String(unreadNoticeCount)
+          : undefined,
+      tabBarBadgeStyle: styles.tabBarBadge,
+    });
+
+    return () => {
+      navigation.setOptions({
+        tabBarBadge: undefined,
+      });
+    };
+  }, [navigation, unreadNoticeCount]);
 
   const getSeverityStyles = (severity: string) => {
     switch (severity) {
@@ -157,6 +252,35 @@ export default function NoticesScreen({ navigation }: any) {
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
     };
     return new Date(dateString).toLocaleDateString('es-ES', options);
+  };
+
+  const getExpirationStatus = (expiresAt?: string | Date | null) => {
+    if (!expiresAt) {
+      return null;
+    }
+
+    const expirationTime = expiresAt instanceof Date
+      ? expiresAt.getTime()
+      : Date.parse(expiresAt);
+    const remainingTime = expirationTime - Date.now();
+
+    if (!Number.isFinite(expirationTime) || remainingTime <= 0 || remainingTime > 24 * 60 * 60 * 1000) {
+      return null;
+    }
+
+    if (remainingTime <= 60 * 60 * 1000) {
+      return {
+        label: `Vence en ${Math.max(1, Math.ceil(remainingTime / 60000))} min`,
+        color: '#C2410C',
+        backgroundColor: '#FFEDD5',
+      };
+    }
+
+    return {
+      label: `Vence en ${Math.ceil(remainingTime / (60 * 60 * 1000))} h`,
+      color: '#B45309',
+      backgroundColor: '#FEF3C7',
+    };
   };
 
   const handleCall = (phone: string) => {
@@ -219,6 +343,7 @@ export default function NoticesScreen({ navigation }: any) {
 
   const renderNoticeCard = ({ item }: { item: any }) => {
     const sev = getSeverityStyles(item.severity);
+    const expiration = getExpirationStatus(item.expiresAt);
     const noticeImages = Array.isArray(item.images) && item.images.length > 0
       ? item.images
       : item.imageUrl
@@ -257,6 +382,13 @@ export default function NoticesScreen({ navigation }: any) {
           </View>
           <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
         </View>
+
+        {expiration ? (
+          <View style={[styles.expirationBadge, { backgroundColor: expiration.backgroundColor }]}>
+            <Ionicons name="time-outline" size={13} color={expiration.color} />
+            <Text style={[styles.expirationText, { color: expiration.color }]}>{expiration.label}</Text>
+          </View>
+        ) : null}
 
         {item.address ? (
           <View style={styles.addressBox}>
@@ -315,7 +447,9 @@ export default function NoticesScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Muro de Avisos</Text>
-        <Text style={styles.headerSubtitle}>Comunicados oficiales y alertas de Lules</Text>
+        <Text style={styles.headerSubtitle}>
+          Comunicados oficiales y alertas de Lules
+        </Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.barrioFilterScroll}>
           <TouchableOpacity
@@ -405,6 +539,24 @@ export default function NoticesScreen({ navigation }: any) {
               {selectedSource === 'TODOS' ? 'Origen' : selectedSource === 'OFICIAL' ? 'Oficial' : 'Vecinal'}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.unreadFilterButton, unreadOnly && styles.unreadFilterButtonActive]}
+            onPress={() => setUnreadOnly((current) => !current)}
+          >
+            <Ionicons
+              name={unreadOnly ? 'mail-unread' : 'mail-unread-outline'}
+              size={14}
+              color={unreadOnly ? '#fff' : '#264653'}
+            />
+            <Text
+              style={[
+                styles.unreadFilterButtonText,
+                unreadOnly && styles.unreadFilterButtonTextActive,
+              ]}
+            >
+              Sin leer ({unreadNoticeCount})
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -422,8 +574,17 @@ export default function NoticesScreen({ navigation }: any) {
         </View>
       ) : notices.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="notifications-off-outline" size={60} color="#ccc" />
-          <Text style={styles.emptyText}>No hay avisos activos para "{selectedBarrio}" con esta clasificación.</Text>
+          <Ionicons name={emptyState.icon} size={60} color="#ccc" />
+          <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+          <Text style={styles.emptyText}>{emptyState.message}</Text>
+          {emptyState.showClearFilters ? (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={clearNoticeFilters}
+            >
+              <Text style={styles.retryButtonText}>Limpiar filtros</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : (
         <FlatList
@@ -556,11 +717,19 @@ export default function NoticesScreen({ navigation }: any) {
                       : [];
                   return noticeImages.length > 0 ? (
                     <>
-                      <Image
-                        source={{ uri: `${BASE_URL}${noticeImages[selectedImageIndex]}` }}
-                        style={styles.detailImage}
-                        resizeMode="contain"
-                      />
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => openGallery(noticeImages, selectedImageIndex)}
+                      >
+                        <Image
+                          source={{ uri: `${BASE_URL}${noticeImages[selectedImageIndex]}` }}
+                          style={styles.detailImage}
+                          resizeMode="contain"
+                        />
+                      </TouchableOpacity>
+                      <Text style={styles.galleryHint}>
+                        Toca la imagen para ampliar
+                      </Text>
                       {noticeImages.length > 1 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
                           {noticeImages.map((imageUrl: string, index: number) => (
@@ -584,6 +753,15 @@ export default function NoticesScreen({ navigation }: any) {
                 <Text style={styles.noticeTitle}>{selectedNotice.title}</Text>
                 <Text style={styles.detailIssuer}>{selectedNotice.issuer}</Text>
                 <Text style={styles.detailDate}>{formatDate(selectedNotice.createdAt)}</Text>
+                {(() => {
+                  const expiration = getExpirationStatus(selectedNotice.expiresAt);
+                  return expiration ? (
+                    <View style={[styles.expirationBadge, styles.detailExpirationBadge, { backgroundColor: expiration.backgroundColor }]}>
+                      <Ionicons name="time-outline" size={14} color={expiration.color} />
+                      <Text style={[styles.expirationText, { color: expiration.color }]}>{expiration.label}</Text>
+                    </View>
+                  ) : null;
+                })()}
                 <Text style={styles.detailDescription}>{selectedNotice.description}</Text>
                 {selectedNotice.address ? (
                   <Text style={styles.detailMeta}>Ubicación: {selectedNotice.address}</Text>
@@ -612,6 +790,48 @@ export default function NoticesScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={galleryVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGalleryVisible(false)}
+      >
+        <View style={styles.galleryModal}>
+          <TouchableOpacity
+            style={styles.galleryCloseButton}
+            onPress={() => setGalleryVisible(false)}
+            accessibilityLabel="Cerrar galería"
+          >
+            <Ionicons name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+          <ImageViewer
+            imageUrls={galleryImages}
+            index={selectedImageIndex}
+            onChange={(index) => {
+              if (typeof index === 'number') {
+                setSelectedImageIndex(index);
+              }
+            }}
+            enableSwipeDown
+            onSwipeDown={() => setGalleryVisible(false)}
+            backgroundColor="rgba(0,0,0,0.96)"
+            style={{ width: '100%', height: '100%' }}
+            useNativeDriver
+            renderIndicator={(currentIndex = 0, allSize = 0) =>
+              allSize > 1 ? (
+                <View style={styles.galleryIndicator}>
+                  <Text style={styles.galleryIndicatorText}>
+                    {currentIndex} / {allSize}
+                  </Text>
+                </View>
+              ) : (
+                <View />
+              )
+            }
+          />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -620,7 +840,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, backgroundColor: '#fff', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3 },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  headerSubtitle: { fontSize: 14, color: '#666', marginTop: 3 },
+  headerSubtitle: { fontSize: 14, color: '#666', flex: 1 },
+  tabBarBadge: { backgroundColor: '#E63946', color: '#fff', fontSize: 10, fontWeight: '700' },
   barrioFilterScroll: { marginTop: 14, marginBottom: 10 },
   zoneChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f2f5', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#e0e0e0' },
   zoneChipActive: { backgroundColor: '#E63946', borderColor: '#E63946' },
@@ -637,7 +858,12 @@ const styles = StyleSheet.create({
   sourceButtonActive: { backgroundColor: '#264653' },
   sourceButtonText: { fontSize: 12, color: '#264653', fontWeight: '700', marginLeft: 4 },
   sourceButtonTextActive: { color: '#fff' },
+  unreadFilterButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginLeft: 6, backgroundColor: '#eef4f7' },
+  unreadFilterButtonActive: { backgroundColor: '#E63946' },
+  unreadFilterButtonText: { fontSize: 12, color: '#264653', fontWeight: '700', marginLeft: 4 },
+  unreadFilterButtonTextActive: { color: '#fff' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#333', marginTop: 15, textAlign: 'center' },
   emptyText: { fontSize: 15, color: '#666', marginTop: 15, textAlign: 'center' },
   retryButton: { backgroundColor: '#E63946', borderRadius: 8, paddingHorizontal: 22, paddingVertical: 10, marginTop: 16 },
   retryButtonText: { color: '#fff', fontWeight: 'bold' },
@@ -656,6 +882,9 @@ const styles = StyleSheet.create({
   barrioBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff0f0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   barrioBadgeText: { fontSize: 12, fontWeight: '600', color: '#E63946', marginLeft: 3 },
   dateText: { fontSize: 12, color: '#888' },
+  expirationBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, marginBottom: 10 },
+  detailExpirationBadge: { marginTop: 10 },
+  expirationText: { fontSize: 12, fontWeight: '700', marginLeft: 4 },
   addressBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f6f8', padding: 8, borderRadius: 8, marginBottom: 10 },
   addressText: { fontSize: 13, color: '#333', fontWeight: '500', marginLeft: 6, flex: 1 },
   descriptionText: { fontSize: 14, color: '#444', lineHeight: 20, marginBottom: 12 },
@@ -678,6 +907,11 @@ const styles = StyleSheet.create({
   detailDescription: { color: '#333', fontSize: 16, lineHeight: 24, marginTop: 18 },
   detailMeta: { color: '#555', marginTop: 12 },
   detailImage: { width: '100%', height: 220, marginTop: 18, borderRadius: 10 },
+  galleryHint: { color: '#777', fontSize: 12, marginTop: 6, textAlign: 'center' },
+  galleryModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)' },
+  galleryCloseButton: { position: 'absolute', top: 44, right: 20, zIndex: 2, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  galleryIndicator: { position: 'absolute', top: 52, left: 20, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.55)' },
+  galleryIndicatorText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   thumbnailRow: { marginTop: 10, marginBottom: 8 },
   thumbnailButton: { marginRight: 8, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
   thumbnailButtonActive: { borderColor: '#E63946' },

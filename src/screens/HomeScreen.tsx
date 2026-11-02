@@ -1,13 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, Modal, Alert, DeviceEventEmitter } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { AppState, Platform, StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, Modal, Alert, DeviceEventEmitter } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as IntentLauncher from 'expo-intent-launcher';
 
 export default function HomeScreen({ route, navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [locationErrorType, setLocationErrorType] = useState<
+    'permission' | 'services' | 'unknown' | null
+  >(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const locationRequestInFlight = useRef(false);
+  const locationRef = useRef<Location.LocationObject | null>(null);
   const [selectedFocusLocation, setSelectedFocusLocation] = useState(
     route.params?.focusLocation ?? null,
   );
@@ -35,20 +41,139 @@ export default function HomeScreen({ route, navigation }: any) {
     };
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      // Si ya nos pasaron una ubicación objetivo desde los avisos, podemos usarla temporalmente para no forzar el GPS si tarda
-      let { status } = await Location.requestForegroundPermissionsAsync();
+  const loadLocation = useCallback(async () => {
+    if (locationRequestInFlight.current) {
+      return;
+    }
+
+    locationRequestInFlight.current = true;
+    setErrorMsg(null);
+    setLocationErrorType(null);
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
       if (status !== 'granted') {
-        setErrorMsg('Permiso de ubicación denegado.');
+        setLocation(null);
+        locationRef.current = null;
+        setLocationErrorType('permission');
+        setErrorMsg(
+          'Necesitamos permiso de ubicación para mostrar el mapa y crear reportes precisos.',
+        );
         return;
       }
-      let currentPosition = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
+
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        setLocation(null);
+        locationRef.current = null;
+        setLocationErrorType('services');
+        setErrorMsg(
+          'La ubicación del dispositivo está desactivada. Actívala y vuelve a la aplicación.',
+        );
+        return;
+      }
+
+      const currentPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
       });
+      locationRef.current = currentPosition;
       setLocation(currentPosition);
-    })();
+    } catch (error) {
+      console.error('Error obteniendo la ubicación:', error);
+      setLocation(null);
+      locationRef.current = null;
+      setLocationErrorType('unknown');
+      setErrorMsg(
+        'No pudimos obtener tu ubicación. Verifica que el GPS esté activo e inténtalo nuevamente.',
+      );
+    } finally {
+      locationRequestInFlight.current = false;
+    }
   }, []);
+
+  const handleLocationRecovery = async () => {
+    if (locationErrorType === 'services' && Platform.OS === 'android') {
+      try {
+        await IntentLauncher.startActivityAsync(
+          IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS,
+        );
+        await loadLocation();
+      } catch (error) {
+        console.error('Error abriendo los ajustes de ubicación:', error);
+        setErrorMsg(
+          'No pudimos abrir los ajustes de ubicación. Activa el GPS manualmente e inténtalo nuevamente.',
+        );
+      }
+      return;
+    }
+
+    await loadLocation();
+  };
+
+  useEffect(() => {
+    void loadLocation();
+  }, [loadLocation]);
+
+  useEffect(() => {
+    let previousState = AppState.currentState;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const returnedToForeground =
+        previousState !== 'active' && nextState === 'active';
+
+      previousState = nextState;
+
+      if (returnedToForeground) {
+        void loadLocation();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [loadLocation]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkLocationServices = async () => {
+      try {
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!servicesEnabled) {
+          locationRef.current = null;
+          setLocation(null);
+          setLocationErrorType('services');
+          setErrorMsg(
+            'La ubicación del dispositivo está desactivada. Actívala para continuar.',
+          );
+          return;
+        }
+
+        if (
+          !locationRef.current &&
+          (locationErrorType === null || locationErrorType === 'services') &&
+          !locationRequestInFlight.current
+        ) {
+          void loadLocation();
+        }
+      } catch (error) {
+        console.error('Error verificando los servicios de ubicación:', error);
+      }
+    };
+
+    const intervalId = setInterval(() => {
+      void checkLocationServices();
+    }, 1500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [loadLocation, locationErrorType]);
 
   const handlePanicSOS = () => {
     Alert.alert(
@@ -67,9 +192,7 @@ export default function HomeScreen({ route, navigation }: any) {
 
   const handleCategorySelect = (category: string) => {
     setModalVisible(false);
-    setTimeout(() => {
-      navigation.navigate('ReportForm', { category, location });
-    }, 250);
+    navigation.navigate('ReportForm', { category, location });
   };
 
   // Generamos el HTML del mapa adaptándose si hay un punto a destacar o solo la posición actual
@@ -146,6 +269,26 @@ export default function HomeScreen({ route, navigation }: any) {
       </html>
     `;
   }, [location, focusLocation]);
+
+  if (!location && errorMsg) {
+    return (
+      <View style={[styles.container, styles.locationErrorContainer]}>
+        <Ionicons name="location-outline" size={64} color="#E63946" />
+        <Text style={styles.locationErrorTitle}>Ubicación no disponible</Text>
+        <Text style={styles.locationErrorText}>{errorMsg}</Text>
+        <TouchableOpacity
+          style={styles.retryLocationButton}
+          onPress={() => void handleLocationRecovery()}
+        >
+          <Text style={styles.retryLocationButtonText}>
+            {locationErrorType === 'services'
+              ? 'Activar ubicación'
+              : 'Reintentar'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (!location) {
     return (
@@ -242,6 +385,37 @@ export default function HomeScreen({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+  locationErrorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  locationErrorTitle: {
+    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  locationErrorText: {
+    color: '#666',
+    fontSize: 16,
+    lineHeight: 23,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  retryLocationButton: {
+    backgroundColor: '#E63946',
+    borderRadius: 10,
+    marginTop: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 13,
+  },
+  retryLocationButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   // CORRECCIÓN: Quitamos el marginBottom para que el mapa ocupe toda la pantalla de forma fluida
   map: { flex: 1 }, 
   bottomContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center', justifyContent: 'center' },
