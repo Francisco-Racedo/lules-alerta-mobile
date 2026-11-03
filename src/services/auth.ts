@@ -14,6 +14,7 @@ export type AuthUser = {
   id: string;
   nombre?: string;
   dni?: string;
+  role?: 'USER' | 'ADMIN';
   telefono?: string;
   fotoPerfil?: string | null;
   email?: string;
