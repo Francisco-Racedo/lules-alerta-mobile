@@ -22,6 +22,16 @@ import { BASE_URL } from '../services/auth';
 
 const MAX_IMAGES = 5;
 
+const normalizeAddress = (address: string): string =>
+  address
+    .split(/\s+/)
+    .filter((part, index, parts) => {
+      const previousPart = parts[index - 1];
+      return !previousPart || part.toLocaleLowerCase() !== previousPart.toLocaleLowerCase();
+    })
+    .join(' ')
+    .trim();
+
 type BeforeRemoveEvent = {
   data: { action: object };
   preventDefault: () => void;
@@ -108,14 +118,12 @@ export default function ReportFormScreen({ route, navigation }: any) {
         return addressText;
       }
 
-      const street = [place.street, place.name]
-        .filter((value, index, values) => value && values.indexOf(value) === index)
-        .join(' ');
+      const street = place.street || place.name;
       const address = [street, place.streetNumber, place.city]
         .filter(Boolean)
         .join(' ');
 
-      return address || addressText;
+      return normalizeAddress(address || addressText);
     } catch (error) {
       console.warn('No se pudo obtener la dirección del reporte:', error);
       return addressText;
@@ -205,12 +213,14 @@ export default function ReportFormScreen({ route, navigation }: any) {
 
   const uploadReport = (
   formData: ReactNativeFormData,
+  token: string,
 ): Promise<{ status: number; body: string }> => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
     xhr.open('POST', `${BASE_URL}/alerts`);
     xhr.setRequestHeader('Accept', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.timeout = 120000;
 
     xhr.onload = () => {
@@ -269,18 +279,10 @@ export default function ReportFormScreen({ route, navigation }: any) {
   setIsSubmitting(true);
 
   try {
-    const storedData = await AsyncStorage.getItem('userData');
+    const token = await AsyncStorage.getItem('userToken');
 
-    if (!storedData) {
+    if (!token) {
       throw new Error('No se encontró sesión de usuario');
-    }
-
-    const user = JSON.parse(storedData);
-
-    if (!user?.id) {
-      throw new Error(
-        'La sesión no contiene un identificador de usuario válido',
-      );
     }
 
     const formData = new FormData() as ReactNativeFormData;
@@ -289,7 +291,6 @@ export default function ReportFormScreen({ route, navigation }: any) {
     formData.append('description', description.trim());
     formData.append('latitude', String(lat));
     formData.append('longitude', String(lng));
-    formData.append('userId', String(user.id));
     formData.append('address', await getCurrentAddress(lat, lng));
 
     selectedImages.forEach((asset, index) => {
@@ -302,7 +303,7 @@ export default function ReportFormScreen({ route, navigation }: any) {
       formData.append('files', imageFile);
     });
 
-    await uploadReport(formData);
+    await uploadReport(formData, token);
 
     Toast.show({
       type: 'success',

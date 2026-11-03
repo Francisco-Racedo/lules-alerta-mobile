@@ -37,6 +37,16 @@ const REPORTS_PAGE_SIZE = 25;
 const ARGENTINA_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 const ARGENTINA_UTC_OFFSET_HOURS = 3;
 
+const normalizeAddress = (address: string): string =>
+  address
+    .split(/\s+/)
+    .filter((part, index, parts) => {
+      const previousPart = parts[index - 1];
+      return !previousPart || part.toLocaleLowerCase() !== previousPart.toLocaleLowerCase();
+    })
+    .join(' ')
+    .trim();
+
 const getArgentinaDateParts = (date: Date): {
   year: number;
   month: number;
@@ -81,11 +91,13 @@ const getReportDateForFilter = (
   }
 
   if (
-    (filter === 'RESOLVED' || filter === 'DISMISSED') &&
+    (filter === 'IN_PROGRESS' ||
+      filter === 'RESOLVED' ||
+      filter === 'DISMISSED') &&
     Array.isArray(report.history)
   ) {
     const statusChange = [...report.history]
-      .filter((event) => event.newStatus === (filter as ReportStatus))
+      .filter((event) => event.newStatus === filter)
       .sort(
         (first, second) =>
           new Date(second.changedAt).getTime() -
@@ -653,7 +665,7 @@ export default function MyReportsScreen({
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color="#666" />
             <Text style={styles.addressText} numberOfLines={2}>
-              {item.address}
+              {normalizeAddress(item.address)}
             </Text>
           </View>
         ) : null}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Alert as NativeAlert, TextInput, ActivityIndicator, Linking, Platform, Modal, ScrollView, Dimensions, DeviceEventEmitter } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -15,6 +16,16 @@ import type { ReportHistoryEvent, ReportItem, ReportStatus } from '../types/repo
 const { width: screenWidth } = Dimensions.get('window');
 const REPORT_CHANGED_EVENT = 'reportChanged';
 const ARGENTINA_TIME_ZONE = 'America/Argentina/Buenos_Aires';
+
+const normalizeAddress = (address: string): string =>
+  address
+    .split(/\s+/)
+    .filter((part, index, parts) => {
+      const previousPart = parts[index - 1];
+      return !previousPart || part.toLocaleLowerCase() !== previousPart.toLocaleLowerCase();
+    })
+    .join(' ')
+    .trim();
 
 type DetailRoute = {
   params: {
@@ -79,10 +90,6 @@ export default function DetalleReporteScreen({
   );
 
   const getTimelineTitle = (event: ReportHistoryEvent) => {
-    if (event.previousStatus) {
-      return `${getStatusText(event.previousStatus)} → ${getStatusText(event.newStatus)}`;
-    }
-
     return getStatusText(event.newStatus);
   };
 
@@ -139,6 +146,10 @@ export default function DetalleReporteScreen({
     setIsProcessing(true);
 
     const imageUri = result.assets[0].uri;
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+      throw new Error('La sesión no está disponible.');
+    }
     const filename =
       result.assets[0].fileName ||
       imageUri.split('/').pop() ||
@@ -156,6 +167,9 @@ export default function DetalleReporteScreen({
         uploadType: FileSystemUploadType.MULTIPART,
         fieldName: 'file',
         mimeType: type,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
     );
 
@@ -260,9 +274,17 @@ export default function DetalleReporteScreen({
     }
     setIsProcessing(true);
     try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        throw new Error('La sesión no está disponible.');
+      }
+
       const response = await fetch(`${BASE_URL}/alerts/${report.id}/description`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ description: editedDescription.trim() })
       });
       if (!response.ok) throw new Error('Error al actualizar');
@@ -285,7 +307,15 @@ export default function DetalleReporteScreen({
         onPress: async () => {
           setIsProcessing(true);
           try {
-            const response = await fetch(`${BASE_URL}/alerts/${report.id}`, { method: 'DELETE' });
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) {
+              throw new Error('La sesión no está disponible.');
+            }
+
+            const response = await fetch(`${BASE_URL}/alerts/${report.id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` },
+            });
             if (!response.ok) throw new Error('Error al eliminar');
             DeviceEventEmitter.emit(REPORT_CHANGED_EVENT, report.id);
             Toast.show({ type: 'success', text1: 'Cancelado', text2: 'El reporte fue eliminado correctamente.', position: 'top' });
@@ -307,7 +337,15 @@ export default function DetalleReporteScreen({
         onPress: async () => {
           setIsProcessing(true);
           try {
-            const response = await fetch(`${BASE_URL}/alerts/${report.id}/archive`, { method: 'PATCH' });
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) {
+              throw new Error('La sesión no está disponible.');
+            }
+
+            const response = await fetch(`${BASE_URL}/alerts/${report.id}/archive`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}` },
+            });
             if (!response.ok) throw new Error('Error al archivar');
             DeviceEventEmitter.emit(REPORT_CHANGED_EVENT, report.id);
             Toast.show({ type: 'success', text1: 'Archivado', text2: 'El reporte fue ocultado correctamente.', position: 'top' });
@@ -454,7 +492,11 @@ export default function DetalleReporteScreen({
             <Ionicons name="location-outline" size={20} color="#666" style={styles.icon} />
             <View style={{ flex: 1 }}>
               <Text style={styles.infoLabel}>Ubicación de origen (Inmutable)</Text>
-              <Text style={styles.infoValue}>{report.address || 'Dirección no especificada'}</Text>
+              <Text style={styles.infoValue}>
+                {report.address
+                  ? normalizeAddress(report.address)
+                  : 'Dirección no especificada'}
+              </Text>
             </View>
           </View>
 
