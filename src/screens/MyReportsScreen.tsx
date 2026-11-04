@@ -953,7 +953,10 @@ export default function MyReportsScreen({
           onPress={() => setIsDateModalVisible(false)}
         >
           <Pressable
-            style={styles.modalSheet}
+            style={[
+              styles.modalSheet,
+              { paddingBottom: Math.max(insets.bottom + 16, 32) },
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.modalHandle} />
@@ -973,74 +976,81 @@ export default function MyReportsScreen({
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalOptionsContainer}>
-              {([
-                ['ALL', 'Todas las fechas', 'Historial completo de reportes'],
-                ['TODAY', 'Hoy', 'Reportes emitidos hoy'],
-                ['LAST_7_DAYS', 'Últimos 7 días', 'Actividad de la última semana'],
-                ['LAST_30_DAYS', 'Últimos 30 días', 'Actividad del último mes'],
-                ['CUSTOM', 'Rango personalizado', 'Filtrar entre dos fechas'],
-              ] as const).map(([option, title, desc]) => {
-                const isSelected = tempDateFilter === option;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.modalOptionCard,
-                      isSelected && styles.modalOptionCardSelected,
-                    ]}
-                    onPress={() => setTempDateFilter(option)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.modalOptionInfo}>
-                      <Text
-                        style={[
-                          styles.modalOptionTitle,
-                          isSelected && styles.modalOptionTitleSelected,
-                        ]}
-                      >
-                        {title}
-                      </Text>
-                      <Text style={styles.modalOptionDesc}>{desc}</Text>
-                    </View>
-                    <Ionicons
-                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                      size={20}
-                      color={isSelected ? '#E63946' : '#999'}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {tempDateFilter === 'CUSTOM' ? (
-              <View style={styles.modalCustomRangeBox}>
-                <Text style={styles.modalCustomLabel}>
-                  Fechas (formato AAAA-MM-DD):
-                </Text>
-                <View style={styles.modalCustomInputsRow}>
-                  <TextInput
-                    style={styles.modalDateInput}
-                    value={tempCustomStartDate}
-                    onChangeText={setTempCustomStartDate}
-                    placeholder="Desde AAAA-MM-DD"
-                    placeholderTextColor="#8A8F98"
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={10}
-                  />
-                  <Text style={styles.modalDateRangeSeparator}>al</Text>
-                  <TextInput
-                    style={styles.modalDateInput}
-                    value={tempCustomEndDate}
-                    onChangeText={setTempCustomEndDate}
-                    placeholder="Hasta AAAA-MM-DD"
-                    placeholderTextColor="#8A8F98"
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={10}
-                  />
-                </View>
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={styles.modalScrollView}
+            >
+              <View style={styles.modalOptionsContainer}>
+                {([
+                  ['ALL', 'Todas las fechas', 'Historial completo de reportes'],
+                  ['TODAY', 'Hoy', 'Reportes emitidos hoy'],
+                  ['LAST_7_DAYS', 'Últimos 7 días', 'Actividad de la última semana'],
+                  ['LAST_30_DAYS', 'Últimos 30 días', 'Actividad del último mes'],
+                  ['CUSTOM', 'Rango personalizado', 'Filtrar entre dos fechas'],
+                ] as const).map(([option, title, desc]) => {
+                  const isSelected = tempDateFilter === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.modalOptionCard,
+                        isSelected && styles.modalOptionCardSelected,
+                      ]}
+                      onPress={() => setTempDateFilter(option)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modalOptionInfo}>
+                        <Text
+                          style={[
+                            styles.modalOptionTitle,
+                            isSelected && styles.modalOptionTitleSelected,
+                          ]}
+                        >
+                          {title}
+                        </Text>
+                        <Text style={styles.modalOptionDesc}>{desc}</Text>
+                      </View>
+                      <Ionicons
+                        name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={isSelected ? '#E63946' : '#999'}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            ) : null}
+
+              {tempDateFilter === 'CUSTOM' ? (
+                <View style={styles.modalCustomRangeBox}>
+                  <Text style={styles.modalCustomLabel}>
+                    Fechas (formato AAAA-MM-DD):
+                  </Text>
+                  <View style={styles.modalCustomInputsRow}>
+                    <TextInput
+                      style={styles.modalDateInput}
+                      value={tempCustomStartDate}
+                      onChangeText={setTempCustomStartDate}
+                      placeholder="Desde AAAA-MM-DD"
+                      placeholderTextColor="#8A8F98"
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                    <Text style={styles.modalDateRangeSeparator}>al</Text>
+                    <TextInput
+                      style={styles.modalDateInput}
+                      value={tempCustomEndDate}
+                      onChangeText={setTempCustomEndDate}
+                      placeholder="Hasta AAAA-MM-DD"
+                      placeholderTextColor="#8A8F98"
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </ScrollView>
 
             <View style={styles.modalActionsRow}>
               <TouchableOpacity
@@ -1313,11 +1323,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  modalScrollView: {
+    maxHeight: 380,
+  },
   modalActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F2F5',
   },
   modalResetButton: {
     flex: 1,
