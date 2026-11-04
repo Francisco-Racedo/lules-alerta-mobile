@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -183,10 +183,10 @@ const parseReportsResponse = (value: unknown): ReportsResponse => {
 };
 
 type MyReportsNavigation = {
-  navigate: (
-    screen: 'DetalleReporte',
-    params: { report: ReportItem },
-  ) => void;
+  navigate: {
+    (screen: 'DetalleReporte', params: { report: ReportItem }): void;
+    (screen: 'Mapa'): void;
+  };
 };
 
 export default function MyReportsScreen({
@@ -454,9 +454,14 @@ export default function MyReportsScreen({
     };
   }, [loadDataIndependently]);
 
+  const hasLoadedRef = useRef(false);
+
   useFocusEffect(
     useCallback(() => {
-      void loadDataIndependently(true, false);
+      const showSpinner = !hasLoadedRef.current;
+      void loadDataIndependently(showSpinner, false).finally(() => {
+        hasLoadedRef.current = true;
+      });
     }, [loadDataIndependently]),
   );
 
@@ -814,18 +819,112 @@ export default function MyReportsScreen({
     );
   };
 
-  const renderEmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="document-text-outline" size={60} color="#ccc" />
-      <Text style={styles.emptyText}>
-        {hasInvalidCustomDate
-          ? 'Completa correctamente el rango de fechas.'
-          : searchText.trim()
-          ? 'No encontramos reportes que coincidan con tu búsqueda.'
-          : 'No hay reportes en esta categoría.'}
-      </Text>
-    </View>
-  );
+  const renderEmptyComponent = () => {
+    if (searchText.trim().length > 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="search-outline" size={30} color="#64748B" />
+          </View>
+          <Text style={styles.emptyTitle}>Sin coincidencias</Text>
+          <Text style={styles.emptyText}>
+            No encontramos reportes para "{searchText.trim()}".
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyActionButton}
+            onPress={() => setSearchText('')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyActionButtonText}>Limpiar búsqueda</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (hasInvalidCustomDate) {
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: '#FEE4E2' }]}>
+            <Ionicons name="calendar-outline" size={30} color="#B42318" />
+          </View>
+          <Text style={styles.emptyTitle}>Rango de fechas inválido</Text>
+          <Text style={styles.emptyText}>
+            Verifica el formato AAAA-MM-DD y que el inicio sea anterior al fin.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyActionButton}
+            onPress={openDateModal}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyActionButtonText}>Corregir fechas</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (dateFilter !== 'ALL') {
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: '#EEF2F6' }]}>
+            <Ionicons name="calendar-outline" size={30} color="#264653" />
+          </View>
+          <Text style={styles.emptyTitle}>Sin reportes en este período</Text>
+          <Text style={styles.emptyText}>
+            No tienes incidencias registradas en el período seleccionado.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyActionButton}
+            onPress={resetDateFilter}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyActionButtonText}>Ver todas las fechas</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (filter !== 'TODOS') {
+      const statusTitle = filter === 'ARCHIVED' ? 'archivados' : getStatusText(filter).toLowerCase();
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconCircle, { backgroundColor: '#F1F5F9' }]}>
+            <Ionicons name="folder-open-outline" size={30} color="#64748B" />
+          </View>
+          <Text style={styles.emptyTitle}>No hay reportes {statusTitle}</Text>
+          <Text style={styles.emptyText}>
+            No tienes incidencias registradas con este estado actualmente.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyActionButton}
+            onPress={() => setFilter('TODOS')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyActionButtonText}>Ver todos los reportes</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={[styles.emptyIconCircle, { backgroundColor: '#EBF3FC' }]}>
+          <Ionicons name="shield-checkmark-outline" size={36} color="#1D70B8" />
+        </View>
+        <Text style={styles.emptyTitle}>Aún no tienes reportes</Text>
+        <Text style={styles.emptyText}>
+          Cuando crees una alerta o emergencia ciudadana en Lules, podrás seguir aquí el estado y resolución de las autoridades.
+        </Text>
+        <TouchableOpacity
+          style={[styles.emptyActionButton, styles.emptyCreateButton]}
+          onPress={() => navigation.navigate('Mapa')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add-circle-outline" size={17} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.emptyCreateButtonText}>Crear mi primer reporte</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderErrorScreen = () => (
     <View style={styles.errorContainer}>
@@ -1438,14 +1537,55 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
-    flex: 1,
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+  },
+  emptyIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 6,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 15,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 19,
     textAlign: 'center',
+    marginBottom: 18,
+  },
+  emptyActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#EEF2F6',
+  },
+  emptyActionButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  emptyCreateButton: {
+    backgroundColor: '#E63946',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  emptyCreateButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   errorContainer: {
     flex: 1,
