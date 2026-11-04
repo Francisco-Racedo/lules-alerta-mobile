@@ -489,6 +489,47 @@ export default function MyReportsScreen({
     setFilter(selectedFilter);
   };
 
+  const getCategoryConfig = (category?: string): {
+    icon: keyof typeof Ionicons.glyphMap;
+    color: string;
+    backgroundColor: string;
+  } => {
+    const normalized = (category || '').trim().toLowerCase();
+    if (normalized.includes('salud') || normalized.includes('médic') || normalized.includes('medic')) {
+      return {
+        icon: 'medkit',
+        color: '#2A9D8F',
+        backgroundColor: '#E6F7F5',
+      };
+    }
+    if (normalized.includes('seguridad') || normalized.includes('polic') || normalized.includes('robo') || normalized.includes('sospecha')) {
+      return {
+        icon: 'shield-checkmark',
+        color: '#1D70B8',
+        backgroundColor: '#EBF3FC',
+      };
+    }
+    if (normalized.includes('bombe') || normalized.includes('fuego') || normalized.includes('incendio')) {
+      return {
+        icon: 'flame',
+        color: '#E76F51',
+        backgroundColor: '#FEF4E8',
+      };
+    }
+    if (normalized.includes('infraestructura') || normalized.includes('bache') || normalized.includes('calle') || normalized.includes('luz')) {
+      return {
+        icon: 'construct',
+        color: '#8B572A',
+        backgroundColor: '#F6EFEA',
+      };
+    }
+    return {
+      icon: 'alert-circle',
+      color: '#E63946',
+      backgroundColor: '#FEE4E2',
+    };
+  };
+
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'PENDING':
@@ -682,18 +723,34 @@ export default function MyReportsScreen({
   const renderAlertCard = ({ item }: { item: ReportItem }) => {
     const images = getImageList(item);
     const previewImage = images[0];
+    const categoryConfig = getCategoryConfig(item.category);
 
     return (
       <TouchableOpacity
         style={styles.card}
-        activeOpacity={0.9}
+        activeOpacity={0.88}
         onPress={() => navigation.navigate('DetalleReporte', { report: item })}
       >
         <View style={styles.cardHeader}>
-          <View style={styles.categoryBadge}>
-            <Ionicons name="warning" size={16} color="#E63946" />
-            <Text style={styles.categoryText}>
-              {item.category || 'Sin categoría'}
+          <View
+            style={[
+              styles.categoryBadge,
+              { backgroundColor: categoryConfig.backgroundColor },
+            ]}
+          >
+            <Ionicons
+              name={categoryConfig.icon}
+              size={15}
+              color={categoryConfig.color}
+            />
+            <Text
+              style={[
+                styles.categoryText,
+                { color: categoryConfig.color },
+              ]}
+              numberOfLines={1}
+            >
+              {item.category || 'Incidencia'}
             </Text>
           </View>
 
@@ -703,17 +760,21 @@ export default function MyReportsScreen({
               { backgroundColor: getStatusColor(item.status) },
             ]}
           >
+            <View style={styles.statusDot} />
             <Text style={styles.statusText}>
               {getStatusText(item.status)}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+        <View style={styles.metaRow}>
+          <Ionicons name="time-outline" size={13} color="#8A92A6" />
+          <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+        </View>
 
         {item.address ? (
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={16} color="#666" />
+            <Ionicons name="location-sharp" size={15} color="#E63946" />
             <Text style={styles.addressText} numberOfLines={2}>
               {normalizeAddress(item.address)}
             </Text>
@@ -731,11 +792,12 @@ export default function MyReportsScreen({
             <Image
               source={{ uri: getAssetUrl(previewImage) }}
               style={styles.alertImage}
+              resizeMode="cover"
             />
 
             {images.length > 1 ? (
               <View style={styles.imageCountBadge}>
-                <Ionicons name="images-outline" size={14} color="#fff" />
+                <Ionicons name="images" size={13} color="#fff" />
                 <Text style={styles.imageCountText}>
                   {images.length} fotos
                 </Text>
@@ -743,6 +805,11 @@ export default function MyReportsScreen({
             ) : null}
           </View>
         ) : null}
+
+        <View style={styles.cardFooter}>
+          <Text style={styles.cardFooterText}>Ver detalle y seguimiento</Text>
+          <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
+        </View>
       </TouchableOpacity>
     );
   };
@@ -1459,98 +1526,131 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 3,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#ECEFF1',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffe6e6',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 20,
+    borderRadius: 12,
     flexShrink: 1,
+    marginRight: 8,
   },
   categoryText: {
-    color: '#E63946',
-    fontWeight: 'bold',
-    marginLeft: 5,
+    fontWeight: '800',
+    marginLeft: 6,
     fontSize: 12,
     flexShrink: 1,
+    letterSpacing: -0.2,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginLeft: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+    marginRight: 5,
   },
   statusText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '800',
     fontSize: 10,
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   dateText: {
     fontSize: 12,
-    color: '#888',
-    marginBottom: 10,
+    color: '#718096',
+    marginLeft: 5,
+    fontWeight: '500',
   },
   locationRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 2,
   },
   addressText: {
-    fontSize: 14,
-    color: '#444',
+    fontSize: 13,
+    color: '#2D3748',
+    fontWeight: '600',
     marginLeft: 5,
     flex: 1,
   },
   descriptionText: {
-    fontSize: 14,
-    color: '#333',
-    fontStyle: 'italic',
+    fontSize: 13,
+    color: '#4A5568',
+    lineHeight: 19,
     marginBottom: 10,
-    backgroundColor: '#f9f9f9',
-    padding: 10,
-    borderRadius: 8,
   },
   imagePreviewContainer: {
     position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
   },
   alertImage: {
     width: '100%',
-    height: 180,
-    borderRadius: 8,
-    backgroundColor: '#eee',
+    height: 170,
+    borderRadius: 12,
+    backgroundColor: '#E2E8F0',
   },
   imageCountBadge: {
     position: 'absolute',
-    right: 10,
-    bottom: 10,
+    right: 8,
+    bottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 15,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   imageCountText: {
     color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  cardFooterText: {
     fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 5,
+    fontWeight: '700',
+    color: '#64748B',
   },
 });
