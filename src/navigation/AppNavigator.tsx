@@ -9,6 +9,7 @@ import {
   clearSession,
   getCurrentUser,
 } from '../services/auth';
+import { registerDeviceForPushNotifications } from '../services/pushNotifications';
 
 import HomeScreen from '../screens/HomeScreen';
 import ReportFormScreen from '../screens/ReportFormScreen';
@@ -97,6 +98,9 @@ export default function AppNavigator() {
           JSON.stringify(currentUser),
         );
         setInitialRoute('MainTabs');
+        void registerDeviceForPushNotifications(userToken).catch((error) => {
+          console.error('Error al registrar el dispositivo para notificaciones push.', error);
+        });
       } catch {
         setInitialRoute('Login');
       } finally {

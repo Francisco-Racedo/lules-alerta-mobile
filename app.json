@@ -1,19 +1,28 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Lules Alerta",
+    "slug": "lules-alerta",
     "version": "1.0.0",
     "android": {
       "softwareKeyboardLayoutMode": "pan",
+      "googleServicesFile": "./google-services.json",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDl_gYlW2aKNJ_jqNob0k3aYl4uB8Gw8HQ"
         }
-      }
+      },
+      "package": "com.franracedo.lulesalerta"
     },
     "plugins": [
       "expo-status-bar",
-      "expo-font"
-    ]
+      "expo-font",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d9edda63-8c4b-4bec-801b-19c234b02897"
+      }
+    },
+    "owner": "franracedo"
   }
 }

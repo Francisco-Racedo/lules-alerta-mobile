@@ -20,6 +20,7 @@ import { io, type Socket } from 'socket.io-client';
 import {
   BASE_URL,
   fetchWithTimeout,
+  getAssetUrl,
 } from '../services/auth';
 import type { ReportItem, ReportStatus } from '../types/reports';
 
@@ -679,7 +680,7 @@ export default function MyReportsScreen({
         {previewImage ? (
           <View style={styles.imagePreviewContainer}>
             <Image
-              source={{ uri: `${BASE_URL}${previewImage}` }}
+              source={{ uri: getAssetUrl(previewImage) }}
               style={styles.alertImage}
             />
 

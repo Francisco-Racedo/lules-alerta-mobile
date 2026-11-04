@@ -4,7 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { AuthUser, BASE_URL } from '../services/auth';
+import { AuthUser, getAssetUrl } from '../services/auth';
+import {
+  unregisterDeviceForPushNotifications,
+} from '../services/pushNotifications';
 
 export default function ProfileScreen({ navigation }: any) {
   const [userData, setUserData] = useState<AuthUser | null>(null);
@@ -39,8 +42,17 @@ export default function ProfileScreen({ navigation }: any) {
           text: 'Salir', 
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('userToken');
-            await AsyncStorage.removeItem('userData');
+            const token = await AsyncStorage.getItem('userToken');
+            try {
+              if (token) {
+                await unregisterDeviceForPushNotifications(token);
+              }
+            } catch (error) {
+              console.error('Error al desactivar las notificaciones push.', error);
+            } finally {
+              await AsyncStorage.removeItem('userToken');
+              await AsyncStorage.removeItem('userData');
+            }
             navigation.reset({
               index: 0,
               routes: [{ name: 'Login' }],
@@ -54,7 +66,7 @@ export default function ProfileScreen({ navigation }: any) {
   const renderAvatarSource = () => {
     if (!userData?.fotoPerfil) return undefined;
     if (userData.fotoPerfil.startsWith('file')) return { uri: userData.fotoPerfil };
-    return { uri: `${BASE_URL}${userData.fotoPerfil}` };
+    return { uri: getAssetUrl(userData.fotoPerfil) };
   };
 
   if (loading) {

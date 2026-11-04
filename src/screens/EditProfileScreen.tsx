@@ -10,7 +10,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import Toast from 'react-native-toast-message';
-import { BASE_URL } from '../services/auth';
+import { BASE_URL, getAssetUrl } from '../services/auth';
 
 export default function EditProfileScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
@@ -240,7 +240,7 @@ export default function EditProfileScreen({ navigation }: any) {
   const renderAvatarSource = () => {
     if (!fotoPerfil) return undefined; 
     if (fotoPerfil.startsWith('file')) return { uri: fotoPerfil };
-    return { uri: `${BASE_URL}${fotoPerfil}` };
+    return { uri: getAssetUrl(fotoPerfil) };
   };
 
   return (

@@ -4,6 +4,14 @@ export const BASE_URL = 'https://lules-alerta-api.onrender.com';
 export const REQUEST_TIMEOUT_MS = 60000;
 export const MAX_PASSWORD_LENGTH = 72;
 
+export const getAssetUrl = (value: string): string => {
+  if (/^(https?|file):\/\//i.test(value)) {
+    return value;
+  }
+
+  return `${BASE_URL}${value.startsWith('/') ? value : `/${value}`}`;
+};
+
 export const isValidDni = (value: string): boolean =>
   /^\d{7,8}$/.test(value);
 

@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { FileSystemUploadType } from 'expo-file-system/legacy';
 import ImageViewer from 'react-native-image-zoom-viewer';
-import { BASE_URL } from '../services/auth';
+import { BASE_URL, getAssetUrl } from '../services/auth';
 import type { ReportHistoryEvent, ReportItem, ReportStatus } from '../types/reports';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -363,7 +363,7 @@ export default function DetalleReporteScreen({
   const openGallery = (imagesArray: string[], startIndex: number) => {
   setModalImages(
     imagesArray.map((img) => ({
-      url: `${BASE_URL}${img}`,
+      url: getAssetUrl(img),
     })),
   );
   setCurrentImageIndex(startIndex);
@@ -415,7 +415,7 @@ export default function DetalleReporteScreen({
     >
       <Image
   source={{
-    uri: `${BASE_URL}${img}`,
+    uri: getAssetUrl(img),
   }}
   style={styles.fullImage}
   resizeMode="cover"
@@ -573,7 +573,7 @@ export default function DetalleReporteScreen({
                         // El ancho es exacto al contenedor interno para habilitar la paginación fluida
                         style={{ width: screenWidth - 70, height: 200 }}
                       >
-                        <Image source={{ uri: `${BASE_URL}${img}` }} style={styles.resolutionImage} resizeMode="cover" />
+                        <Image source={{ uri: getAssetUrl(img) }} style={styles.resolutionImage} resizeMode="cover" />
                       </TouchableOpacity>
                     ))}
                   </ScrollView>

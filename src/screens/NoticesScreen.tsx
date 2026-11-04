@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ImageViewer from 'react-native-image-zoom-viewer';
-import { BASE_URL, fetchWithTimeout } from '../services/auth';
+import { BASE_URL, fetchWithTimeout, getAssetUrl } from '../services/auth';
 
 const BARRIOS_LULES = [
   'Todo Lules',
@@ -212,7 +212,7 @@ export default function NoticesScreen({ navigation }: any) {
 
   const openGallery = (images: string[], index: number) => {
     setGalleryImages(
-      images.map((image) => ({ url: `${BASE_URL}${image}` })),
+      images.map((image) => ({ url: getAssetUrl(image) })),
     );
     setSelectedImageIndex(index);
     setGalleryVisible(true);
@@ -401,7 +401,7 @@ export default function NoticesScreen({ navigation }: any) {
 
         {noticeImages.length > 0 ? (
           <Image 
-            source={{ uri: `${BASE_URL}${noticeImages[0]}` }}
+            source={{ uri: getAssetUrl(noticeImages[0]) }}
             style={styles.noticeImage} 
           />
         ) : null}
@@ -727,7 +727,7 @@ export default function NoticesScreen({ navigation }: any) {
                         onPress={() => openGallery(noticeImages, selectedImageIndex)}
                       >
                         <Image
-                          source={{ uri: `${BASE_URL}${noticeImages[selectedImageIndex]}` }}
+                          source={{ uri: getAssetUrl(noticeImages[selectedImageIndex]) }}
                           style={styles.detailImage}
                           resizeMode="contain"
                         />
@@ -744,7 +744,7 @@ export default function NoticesScreen({ navigation }: any) {
                               style={[styles.thumbnailButton, index === selectedImageIndex && styles.thumbnailButtonActive]}
                             >
                               <Image
-                                source={{ uri: `${BASE_URL}${imageUrl}` }}
+                                source={{ uri: getAssetUrl(imageUrl) }}
                                 style={styles.thumbnailImage}
                                 resizeMode="cover"
                               />

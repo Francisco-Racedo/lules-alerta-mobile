@@ -12,6 +12,7 @@ import {
   isValidDni,
   parseLoginResponse,
 } from '../services/auth';
+import { registerDeviceForPushNotifications } from '../services/pushNotifications';
 
 export default function LoginScreen({ navigation }: any) {
   const [dni, setDni] = useState('');
@@ -84,6 +85,17 @@ export default function LoginScreen({ navigation }: any) {
         JSON.stringify(authResponse.user),
       );
 
+      try {
+        await registerDeviceForPushNotifications(authResponse.access_token);
+      } catch (error) {
+        Alert.alert(
+          'Notificaciones',
+          error instanceof Error
+            ? error.message
+            : 'No se pudo activar el registro de notificaciones.',
+        );
+      }
+
       // Redirección directa al mapa sin posibilidad de volver atrás con el botón nativo
       navigation.replace('MainTabs');
 
@@ -119,6 +131,7 @@ export default function LoginScreen({ navigation }: any) {
             <TextInput
               style={styles.input}
               placeholder="Número de DNI"
+              placeholderTextColor="#777"
               keyboardType="numeric"
               maxLength={8}
               value={dni}
@@ -133,6 +146,7 @@ export default function LoginScreen({ navigation }: any) {
             <TextInput
               style={styles.input}
               placeholder="Contraseña"
+              placeholderTextColor="#777"
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={handlePasswordChange}
