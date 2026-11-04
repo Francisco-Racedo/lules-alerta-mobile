@@ -28,19 +28,64 @@ const BARRIOS_LULES = [
   'La Quebrada',
 ];
 
-export default function NoticesScreen({ navigation }: any) {
+export type NoticeSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
+export type NoticeSourceType = 'OFICIAL' | 'VECINAL';
+export type NoticeStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface NoticeItem {
+  id: string;
+  title: string;
+  description: string;
+  severity: NoticeSeverity;
+  sourceType: NoticeSourceType;
+  issuer: string;
+  barrio: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  contactPhone?: string | null;
+  imageUrl?: string | null;
+  images?: string[] | null;
+  status?: NoticeStatus;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+type NoticesNavigation = {
+  navigate: (
+    screen: 'Mapa',
+    params?: {
+      focusLocation: {
+        latitude: number;
+        longitude: number;
+        title: string;
+        address?: string | null;
+      };
+    },
+  ) => void;
+  setOptions: (options: {
+    tabBarBadge?: string;
+    tabBarBadgeStyle?: unknown;
+  }) => void;
+};
+
+export default function NoticesScreen({
+  navigation,
+}: {
+  navigation: NoticesNavigation;
+}) {
   const insets = useSafeAreaInsets();
-  const [allNotices, setAllNotices] = useState<any[]>([]);
+  const [allNotices, setAllNotices] = useState<NoticeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [userBarrio, setUserBarrio] = useState<string>('');
   
   const [selectedBarrio, setSelectedBarrio] = useState<string>('Todo Lules');
-  const [selectedSeverity, setSelectedSeverity] = useState<'TODOS' | 'CRITICAL' | 'WARNING' | 'INFO'>('TODOS');
-  const [selectedSource, setSelectedSource] = useState<'TODOS' | 'OFICIAL' | 'VECINAL'>('TODOS');
+  const [selectedSeverity, setSelectedSeverity] = useState<'TODOS' | NoticeSeverity>('TODOS');
+  const [selectedSource, setSelectedSource] = useState<'TODOS' | NoticeSourceType>('TODOS');
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [galleryImages, setGalleryImages] = useState<{ url: string }[]>([]);
@@ -162,6 +207,13 @@ export default function NoticesScreen({ navigation }: any) {
     () => allNotices.filter((item) => !readNoticeIds.has(item.id)).length,
     [allNotices, readNoticeIds],
   );
+
+  const getSeverityCount = (severity: 'TODOS' | NoticeSeverity): number => {
+    if (severity === 'TODOS') {
+      return allNotices.length;
+    }
+    return allNotices.filter((item) => item.severity === severity).length;
+  };
 
   const hasActiveFilters =
     selectedBarrio !== 'Todo Lules' ||
@@ -446,122 +498,177 @@ export default function NoticesScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Muro de Avisos</Text>
-        <Text style={styles.headerSubtitle}>
-          Comunicados oficiales y alertas de Lules
-        </Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.barrioFilterScroll}
-          contentContainerStyle={styles.barrioFilterContent}
-        >
-          <TouchableOpacity
-            style={[styles.zoneChip, selectedBarrio === 'Todo Lules' && styles.zoneChipActive]}
-            onPress={() => setSelectedBarrio('Todo Lules')}
-          >
-            <Ionicons name="globe-outline" size={14} color={selectedBarrio === 'Todo Lules' ? '#fff' : '#333'} />
-            <Text style={[styles.zoneChipText, selectedBarrio === 'Todo Lules' && styles.zoneChipTextActive]}>
-              Todo Lules
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Muro de Avisos</Text>
+            <Text style={styles.headerSubtitle}>
+              {allNotices.length > 0
+                ? `${allNotices.length} comunicados${unreadNoticeCount > 0 ? ` · ${unreadNoticeCount} sin leer` : ''}`
+                : 'Comunicados y alertas de Lules'}
             </Text>
-          </TouchableOpacity>
-
-          {userBarrio ? (
-            <TouchableOpacity
-              style={[styles.zoneChip, selectedBarrio === userBarrio && styles.zoneChipActive]}
-              onPress={() => setSelectedBarrio(userBarrio)}
-            >
-              <Ionicons name="home-outline" size={14} color={selectedBarrio === userBarrio ? '#fff' : '#333'} />
-              <Text style={[styles.zoneChipText, selectedBarrio === userBarrio && styles.zoneChipTextActive]}>
-                Mi Barrio ({userBarrio})
-              </Text>
-            </TouchableOpacity>
-          ) : null}
+          </View>
 
           <TouchableOpacity
             style={[
-              styles.zoneChip,
-              selectedBarrio !== 'Todo Lules' && selectedBarrio !== userBarrio && styles.zoneChipActive,
+              styles.zoneTrigger,
+              selectedBarrio !== 'Todo Lules' && styles.zoneTriggerActive,
             ]}
             onPress={() => setBarrioModalVisible(true)}
+            activeOpacity={0.8}
+            accessibilityLabel="Cambiar barrio o zona"
           >
-            <Ionicons 
-              name="business-outline" 
-              size={14} 
-              color={selectedBarrio !== 'Todo Lules' && selectedBarrio !== userBarrio ? '#fff' : '#333'} 
+            <Ionicons
+              name="location-sharp"
+              size={14}
+              color={selectedBarrio !== 'Todo Lules' ? '#fff' : '#E63946'}
             />
             <Text
               style={[
-                styles.zoneChipText,
-                selectedBarrio !== 'Todo Lules' && selectedBarrio !== userBarrio && styles.zoneChipTextActive,
+                styles.zoneTriggerText,
+                selectedBarrio !== 'Todo Lules' && styles.zoneTriggerTextActive,
               ]}
+              numberOfLines={1}
             >
-              {selectedBarrio !== 'Todo Lules' && selectedBarrio !== userBarrio
-                ? `Zona: ${selectedBarrio}`
-                : 'Explorar otro barrio ▼'}
+              {selectedBarrio === userBarrio && userBarrio
+                ? `Mi Barrio (${userBarrio})`
+                : selectedBarrio}
             </Text>
+            <Ionicons
+              name="chevron-down"
+              size={12}
+              color={selectedBarrio !== 'Todo Lules' ? '#fff' : '#64748B'}
+            />
           </TouchableOpacity>
-        </ScrollView>
+        </View>
+      </View>
 
+      <View style={styles.filterBar}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.severityFilterScroll}
-          contentContainerStyle={styles.severityFilterContent}
+          contentContainerStyle={styles.filterContentContainer}
         >
-          <View style={styles.typeFilterRow}>
-            {[
-              { key: 'TODOS', label: 'Todos' },
-              { key: 'CRITICAL', label: '🚨 Urgentes' },
-              { key: 'WARNING', label: '⚠️ Precaución' },
-              { key: 'INFO', label: 'ℹ️ Informativos' },
-            ].map((tab) => (
+          {([
+            { key: 'TODOS', label: 'Todos' },
+            { key: 'CRITICAL', label: 'Urgentes' },
+            { key: 'WARNING', label: 'Precaución' },
+            { key: 'INFO', label: 'Informativos' },
+          ] as const).map((tab) => {
+            const isSelected = selectedSeverity === tab.key;
+            const count = getSeverityCount(tab.key);
+            return (
               <TouchableOpacity
                 key={tab.key}
-                style={[styles.typeTab, selectedSeverity === tab.key && styles.typeTabActive]}
-                onPress={() => setSelectedSeverity(tab.key as any)}
+                style={[
+                  styles.filterChip,
+                  isSelected && styles.filterChipActive,
+                ]}
+                onPress={() => setSelectedSeverity(tab.key)}
+                activeOpacity={0.75}
               >
                 <Text
-                  numberOfLines={1}
-                  style={[styles.typeTabText, selectedSeverity === tab.key && styles.typeTabTextActive]}
+                  style={[
+                    styles.filterChipText,
+                    isSelected && styles.filterChipTextActive,
+                  ]}
                 >
                   {tab.label}
                 </Text>
+                <View
+                  style={[
+                    styles.filterChipBadge,
+                    isSelected && styles.filterChipBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipBadgeText,
+                      isSelected && styles.filterChipBadgeTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              style={[styles.sourceButton, selectedSource !== 'TODOS' && styles.sourceButtonActive]}
-              onPress={() => setSourceModalVisible(true)}
+            );
+          })}
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              unreadOnly && styles.filterChipActiveAlert,
+            ]}
+            onPress={() => setUnreadOnly((prev) => !prev)}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={unreadOnly ? 'mail-unread' : 'mail-unread-outline'}
+              size={14}
+              color={unreadOnly ? '#fff' : '#264653'}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                unreadOnly && styles.filterChipTextActive,
+              ]}
             >
-              <Ionicons
-                name="options-outline"
-                size={14}
-                color={selectedSource !== 'TODOS' ? '#fff' : '#264653'}
-              />
-              <Text style={[styles.sourceButtonText, selectedSource !== 'TODOS' && styles.sourceButtonTextActive]}>
-                {selectedSource === 'TODOS' ? 'Origen' : selectedSource === 'OFICIAL' ? 'Oficial' : 'Vecinal'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.unreadFilterButton, unreadOnly && styles.unreadFilterButtonActive]}
-              onPress={() => setUnreadOnly((current) => !current)}
-            >
-              <Ionicons
-                name={unreadOnly ? 'mail-unread' : 'mail-unread-outline'}
-                size={14}
-                color={unreadOnly ? '#fff' : '#264653'}
-              />
-              <Text
+              Sin leer
+            </Text>
+            {unreadNoticeCount > 0 ? (
+              <View
                 style={[
-                  styles.unreadFilterButtonText,
-                  unreadOnly && styles.unreadFilterButtonTextActive,
+                  styles.filterChipBadge,
+                  unreadOnly
+                    ? styles.filterChipBadgeActiveAlert
+                    : styles.filterChipBadgeUnread,
                 ]}
               >
-                Sin leer ({unreadNoticeCount})
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Text
+                  style={[
+                    styles.filterChipBadgeText,
+                    styles.filterChipBadgeTextActive,
+                  ]}
+                >
+                  {unreadNoticeCount}
+                </Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              selectedSource !== 'TODOS' && styles.filterChipActive,
+            ]}
+            onPress={() => setSourceModalVisible(true)}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name="funnel-outline"
+              size={13}
+              color={selectedSource !== 'TODOS' ? '#fff' : '#59636E'}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                selectedSource !== 'TODOS' && styles.filterChipTextActive,
+              ]}
+            >
+              {selectedSource === 'TODOS'
+                ? 'Origen'
+                : selectedSource === 'OFICIAL'
+                  ? 'Oficial'
+                  : 'Vecinal'}
+            </Text>
+            <Ionicons
+              name="chevron-down"
+              size={12}
+              color={selectedSource !== 'TODOS' ? '#fff' : '#8A92A6'}
+              style={{ marginLeft: 2 }}
+            />
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -843,31 +950,125 @@ export default function NoticesScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, backgroundColor: '#fff', elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  headerSubtitle: { fontSize: 14, color: '#666', flex: 1 },
+  header: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A1D20',
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#6C757D',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  zoneTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 20,
+    maxWidth: 160,
+  },
+  zoneTriggerActive: {
+    backgroundColor: '#E63946',
+    borderColor: '#E63946',
+  },
+  zoneTriggerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#343A40',
+    marginHorizontal: 4,
+    flexShrink: 1,
+  },
+  zoneTriggerTextActive: {
+    color: '#fff',
+  },
+  filterBar: {
+    backgroundColor: '#fff',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterContentContainer: {
+    paddingHorizontal: 16,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F4F6F8',
+    marginRight: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#264653',
+  },
+  filterChipActiveAlert: {
+    backgroundColor: '#E63946',
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: '#59636E',
+    fontWeight: '700',
+  },
+  filterChipTextActive: {
+    color: '#fff',
+  },
+  filterChipBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+    paddingHorizontal: 4,
+    backgroundColor: '#E5E9EF',
+  },
+  filterChipBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  filterChipBadgeActiveAlert: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  filterChipBadgeUnread: {
+    backgroundColor: '#E63946',
+  },
+  filterChipBadgeText: {
+    color: '#495057',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  filterChipBadgeTextActive: {
+    color: '#fff',
+  },
   tabBarBadge: { backgroundColor: '#E63946', color: '#fff', fontSize: 10, fontWeight: '700' },
-  barrioFilterScroll: { marginTop: 14, marginBottom: 10 },
-  barrioFilterContent: { paddingHorizontal: 2 },
-  zoneChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f2f5', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#e0e0e0' },
-  zoneChipActive: { backgroundColor: '#E63946', borderColor: '#E63946' },
-  zoneChipText: { fontSize: 13, color: '#333', fontWeight: '600', marginLeft: 5 },
-  zoneChipTextActive: { color: '#fff' },
-  typeTab: { minWidth: 92, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, borderRadius: 8, marginRight: 6, backgroundColor: '#f8f9fa' },
-  typeTabActive: { backgroundColor: '#333' },
-  typeTabText: { fontSize: 12, color: '#666', fontWeight: '600' },
-  typeTabTextActive: { color: '#fff' },
-  severityFilterScroll: { marginTop: 8 },
-  severityFilterContent: { paddingHorizontal: 2 },
-  typeFilterRow: { flexDirection: 'row', alignItems: 'center' },
-  sourceButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginLeft: 6, backgroundColor: '#eef4f7' },
-  sourceButtonActive: { backgroundColor: '#264653' },
-  sourceButtonText: { fontSize: 12, color: '#264653', fontWeight: '700', marginLeft: 4 },
-  sourceButtonTextActive: { color: '#fff' },
-  unreadFilterButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginLeft: 6, backgroundColor: '#eef4f7' },
-  unreadFilterButtonActive: { backgroundColor: '#E63946' },
-  unreadFilterButtonText: { fontSize: 12, color: '#264653', fontWeight: '700', marginLeft: 4 },
-  unreadFilterButtonTextActive: { color: '#fff' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#333', marginTop: 15, textAlign: 'center' },
   emptyText: { fontSize: 15, color: '#666', marginTop: 15, textAlign: 'center' },
