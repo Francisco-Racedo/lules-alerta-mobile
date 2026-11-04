@@ -393,7 +393,7 @@ export default function NoticesScreen({
     b.toLowerCase().includes(searchBarrio.toLowerCase())
   );
 
-  const renderNoticeCard = ({ item }: { item: any }) => {
+  const renderNoticeCard = ({ item }: { item: NoticeItem }) => {
     const sev = getSeverityStyles(item.severity);
     const expiration = getExpirationStatus(item.expiresAt);
     const noticeImages = Array.isArray(item.images) && item.images.length > 0
@@ -404,94 +404,132 @@ export default function NoticesScreen({
 
     const isUnread = !readNoticeIds.has(item.id);
 
+    const handleCardPress = () => {
+      setSelectedImageIndex(0);
+      setSelectedNotice(item);
+      void markNoticeAsRead(item.id).catch((error) => {
+        console.error('Error marcando aviso como leído:', error);
+      });
+    };
+
     return (
-      <View style={[styles.card, { borderLeftColor: sev.color }, isUnread && styles.unreadCard]}>
+      <TouchableOpacity
+        style={[styles.card, { borderLeftColor: sev.color }, isUnread && styles.unreadCard]}
+        activeOpacity={0.9}
+        onPress={handleCardPress}
+      >
         <View style={styles.cardTopRow}>
           <View style={styles.issuerContainer}>
             <Ionicons 
               name={item.sourceType === 'OFICIAL' ? 'shield-checkmark' : 'people'} 
-              size={16} 
-              color={item.sourceType === 'OFICIAL' ? '#264653' : '#666'} 
+              size={15} 
+              color={item.sourceType === 'OFICIAL' ? '#1D70B8' : '#64748B'} 
             />
-            <Text style={styles.issuerText}>{item.issuer}</Text>
+            <Text style={styles.issuerText} numberOfLines={1}>{item.issuer}</Text>
           </View>
 
           <View style={[styles.severityBadge, { backgroundColor: sev.bg }]}>
-            <Ionicons name={sev.icon} size={13} color={sev.color} />
+            <View style={[styles.severityDot, { backgroundColor: sev.color }]} />
             <Text style={[styles.severityText, { color: sev.color }]}>{sev.label}</Text>
           </View>
         </View>
 
         <View style={styles.titleRow}>
           <Text style={styles.noticeTitle}>{item.title}</Text>
-          {isUnread ? <Text style={styles.unreadLabel}>NUEVO</Text> : null}
+          {isUnread ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>NUEVO</Text>
+            </View>
+          ) : null}
         </View>
         
         <View style={styles.metaRow}>
           <View style={styles.barrioBadge}>
-            <Ionicons name="location" size={12} color="#E63946" />
+            <Ionicons name="location-sharp" size={12} color="#E63946" />
             <Text style={styles.barrioBadgeText}>{item.barrio}</Text>
           </View>
-          <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+          <View style={styles.dateMeta}>
+            <Ionicons name="time-outline" size={12} color="#8A92A6" />
+            <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+          </View>
         </View>
 
         {expiration ? (
           <View style={[styles.expirationBadge, { backgroundColor: expiration.backgroundColor }]}>
-            <Ionicons name="time-outline" size={13} color={expiration.color} />
+            <Ionicons name="alert-circle-outline" size={13} color={expiration.color} />
             <Text style={[styles.expirationText, { color: expiration.color }]}>{expiration.label}</Text>
           </View>
         ) : null}
 
         {item.address ? (
           <View style={styles.addressBox}>
-            <Ionicons name="navigate-circle-outline" size={16} color="#555" />
-            <Text style={styles.addressText}>{item.address}</Text>
+            <Ionicons name="navigate-outline" size={14} color="#64748B" />
+            <Text style={styles.addressText} numberOfLines={1}>{item.address}</Text>
           </View>
         ) : null}
 
-        <Text style={styles.descriptionText}>{item.description}</Text>
+        {item.description ? (
+          <Text style={styles.descriptionText} numberOfLines={3}>
+            {item.description}
+          </Text>
+        ) : null}
 
         {noticeImages.length > 0 ? (
-          <Image 
-            source={{ uri: getAssetUrl(noticeImages[0]) }}
-            style={styles.noticeImage} 
-          />
+          <View style={styles.noticeImageWrapper}>
+            <Image 
+              source={{ uri: getAssetUrl(noticeImages[0]) }}
+              style={styles.noticeImage} 
+              resizeMode="cover"
+            />
+            {noticeImages.length > 1 ? (
+              <View style={styles.imageCountBadge}>
+                <Ionicons name="images" size={12} color="#fff" />
+                <Text style={styles.imageCountText}>{noticeImages.length} fotos</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
 
         <View style={styles.actionsRow}>
-          {item.latitude && item.longitude ? (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleViewOnMap(item)}>
-              <Ionicons name="map-outline" size={16} color="#264653" />
-              <Text style={styles.actionBtnText}>Ver en Mapa</Text>
-            </TouchableOpacity>
-          ) : null}
+          <View style={styles.actionButtonsLeft}>
+            {item.latitude && item.longitude ? (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleViewOnMap(item)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="map-outline" size={14} color="#264653" />
+                <Text style={styles.actionBtnText}>Mapa</Text>
+              </TouchableOpacity>
+            ) : null}
 
-          {item.contactPhone ? (
-            <TouchableOpacity style={[styles.actionBtn, styles.callBtn]} onPress={() => handleCall(item.contactPhone)}>
-              <Ionicons name="call-outline" size={16} color="#E63946" />
-              <Text style={[styles.actionBtnText, { color: '#E63946' }]}>Llamar ({item.contactPhone})</Text>
-            </TouchableOpacity>
-          ) : null}
+            {item.contactPhone ? (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.callBtn]}
+                onPress={() => handleCall(item.contactPhone!)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="call-outline" size={14} color="#E63946" />
+                <Text style={[styles.actionBtnText, { color: '#E63946' }]}>Llamar</Text>
+              </TouchableOpacity>
+            ) : null}
 
-          <TouchableOpacity style={styles.shareBtn} onPress={() => handleShare(item)}>
-            <Ionicons name="share-social-outline" size={16} color="#666" />
-            <Text style={styles.shareBtnText}>Compartir</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => void handleShare(item)}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="share-social-outline" size={14} color="#64748B" />
+              <Text style={styles.actionBtnText}>Compartir</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.cardChevronWrapper}>
+            <Text style={styles.cardChevronText}>Ver detalle</Text>
+            <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
+          </View>
         </View>
-        <TouchableOpacity
-          style={styles.detailBtn}
-          onPress={() => {
-            setSelectedImageIndex(0);
-            setSelectedNotice(item);
-            void markNoticeAsRead(item.id).catch((error) => {
-              console.error('Error marcando aviso como leído:', error);
-            });
-          }}
-        >
-          <Ionicons name="open-outline" size={16} color="#264653" />
-          <Text style={styles.detailBtnText}>Ver detalle completo</Text>
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -722,7 +760,12 @@ export default function NoticesScreen({
         onRequestClose={() => setBarrioModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
+          <View
+            style={[
+              styles.modalContainer,
+              { paddingBottom: Math.max(insets.bottom + 16, 28) },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Seleccionar Zona o Barrio</Text>
               <TouchableOpacity onPress={() => setBarrioModalVisible(false)}>
@@ -740,6 +783,7 @@ export default function NoticesScreen({
             <FlatList
               data={filteredBarriosList}
               keyExtractor={(item) => item}
+              contentContainerStyle={{ paddingBottom: 20 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.barrioOption}
@@ -771,7 +815,12 @@ export default function NoticesScreen({
         onRequestClose={() => setSourceModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
+          <View
+            style={[
+              styles.modalContainer,
+              { paddingBottom: Math.max(insets.bottom + 16, 28) },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filtrar por origen</Text>
               <TouchableOpacity onPress={() => setSourceModalVisible(false)}>
@@ -812,7 +861,12 @@ export default function NoticesScreen({
         onRequestClose={() => setSelectedNotice(null)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.detailModalContainer}>
+          <View
+            style={[
+              styles.detailModalContainer,
+              { paddingBottom: Math.max(insets.bottom + 16, 28) },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Detalle del aviso</Text>
               <TouchableOpacity onPress={() => setSelectedNotice(null)}>
@@ -820,7 +874,10 @@ export default function NoticesScreen({
               </TouchableOpacity>
             </View>
             {selectedNotice ? (
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
                 {(() => {
                   const noticeImages = Array.isArray(selectedNotice.images) && selectedNotice.images.length > 0
                     ? selectedNotice.images
@@ -1075,35 +1132,231 @@ const styles = StyleSheet.create({
   retryButton: { backgroundColor: '#E63946', borderRadius: 8, paddingHorizontal: 22, paddingVertical: 10, marginTop: 16 },
   retryButtonText: { color: '#fff', fontWeight: 'bold' },
   listContainer: { padding: 15 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 15, marginBottom: 15, borderLeftWidth: 5, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  unreadCard: { backgroundColor: '#fffaf0' },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  issuerContainer: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  issuerText: { fontSize: 12, fontWeight: '700', color: '#264653', marginLeft: 5, textTransform: 'uppercase' },
-  severityBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  severityText: { fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
-  noticeTitle: { fontSize: 17, fontWeight: 'bold', color: '#222', marginBottom: 6 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  unreadLabel: { color: '#E63946', fontSize: 10, fontWeight: 'bold', marginTop: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  barrioBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff0f0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  barrioBadgeText: { fontSize: 12, fontWeight: '600', color: '#E63946', marginLeft: 3 },
-  dateText: { fontSize: 12, color: '#888' },
-  expirationBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, marginBottom: 10 },
-  detailExpirationBadge: { marginTop: 10 },
-  expirationText: { fontSize: 12, fontWeight: '700', marginLeft: 4 },
-  addressBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4f6f8', padding: 8, borderRadius: 8, marginBottom: 10 },
-  addressText: { fontSize: 13, color: '#333', fontWeight: '500', marginLeft: 6, flex: 1 },
-  descriptionText: { fontSize: 14, color: '#444', lineHeight: 20, marginBottom: 12 },
-  noticeImage: { width: '100%', height: 170, borderRadius: 8, marginBottom: 12 },
-  actionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10, flexWrap: 'wrap', gap: 8 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eef4f7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  callBtn: { backgroundColor: '#ffe6e6' },
-  actionBtnText: { fontSize: 12, fontWeight: 'bold', color: '#264653', marginLeft: 5 },
-  shareBtn: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 6 },
-  shareBtnText: { fontSize: 12, color: '#666', fontWeight: '600', marginLeft: 4 },
-  detailBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10, marginTop: 10 },
-  detailBtnText: { color: '#264653', fontWeight: '700', marginLeft: 5 },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#ECEFF1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  unreadCard: {
+    backgroundColor: '#FFFBFA',
+    borderColor: '#FEE4E2',
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  issuerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  issuerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  severityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  severityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  severityText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  noticeTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+    lineHeight: 22,
+    flex: 1,
+    marginRight: 8,
+  },
+  unreadBadge: {
+    backgroundColor: '#E63946',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  barrioBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  barrioBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E63946',
+    marginLeft: 3,
+  },
+  dateMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  expirationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  detailExpirationBadge: {
+    marginTop: 10,
+  },
+  expirationText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  addressBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  addressText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+    marginLeft: 5,
+    flex: 1,
+  },
+  descriptionText: {
+    fontSize: 13,
+    color: '#4A5568',
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  noticeImageWrapper: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  noticeImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: '#E2E8F0',
+  },
+  imageCountBadge: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  imageCountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+    marginTop: 2,
+  },
+  actionButtonsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  callBtn: {
+    backgroundColor: '#FEE4E2',
+  },
+  actionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    marginLeft: 4,
+  },
+  cardChevronWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardChevronText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginRight: 2,
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '75%' },
   detailModalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
@@ -1123,6 +1376,20 @@ const styles = StyleSheet.create({
   thumbnailButton: { marginRight: 8, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
   thumbnailButtonActive: { borderColor: '#E63946' },
   thumbnailImage: { width: 64, height: 64, borderRadius: 6 },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  shareBtnText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
   detailActions: { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
   searchInput: { backgroundColor: '#f0f2f5', borderRadius: 10, paddingHorizontal: 15, height: 45, fontSize: 15, marginBottom: 15, color: '#333' },
   barrioOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
