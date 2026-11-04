@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
   DeviceEventEmitter,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -208,6 +210,7 @@ export default function MyReportsScreen({
   const [filter, setFilter] = useState('TODOS');
   const [searchText, setSearchText] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('ALL');
+  const [isDateModalVisible, setIsDateModalVisible] = useState(false);
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const parsedCustomStartDate = parseDateInput(customStartDate, false);
@@ -217,6 +220,52 @@ export default function MyReportsScreen({
     (!parsedCustomStartDate ||
       !parsedCustomEndDate ||
       parsedCustomStartDate >= parsedCustomEndDate);
+
+  const [tempCustomStartDate, setTempCustomStartDate] = useState('');
+  const [tempCustomEndDate, setTempCustomEndDate] = useState('');
+  const [tempDateFilter, setTempDateFilter] = useState<DateFilter>('ALL');
+
+  const openDateModal = () => {
+    setTempDateFilter(dateFilter);
+    setTempCustomStartDate(customStartDate);
+    setTempCustomEndDate(customEndDate);
+    setIsDateModalVisible(true);
+  };
+
+  const applyDateFilter = () => {
+    setDateFilter(tempDateFilter);
+    if (tempDateFilter === 'CUSTOM') {
+      setCustomStartDate(tempCustomStartDate);
+      setCustomEndDate(tempCustomEndDate);
+    }
+    setIsDateModalVisible(false);
+  };
+
+  const resetDateFilter = () => {
+    setTempDateFilter('ALL');
+    setTempCustomStartDate('');
+    setTempCustomEndDate('');
+    setDateFilter('ALL');
+    setCustomStartDate('');
+    setCustomEndDate('');
+    setIsDateModalVisible(false);
+  };
+
+  const getDateFilterBadge = (): string => {
+    switch (dateFilter) {
+      case 'TODAY':
+        return 'Hoy';
+      case 'LAST_7_DAYS':
+        return '7d';
+      case 'LAST_30_DAYS':
+        return '30d';
+      case 'CUSTOM':
+        return 'Rango';
+      case 'ALL':
+      default:
+        return 'Todas';
+    }
+  };
 
   const loadDataIndependently = useCallback(
     async (showLoadingIndicator: boolean, isRefresh: boolean) => {
@@ -741,20 +790,50 @@ export default function MyReportsScreen({
       edges={['top', 'left', 'right']}
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mis Reportes</Text>
-        <Text style={styles.headerSubtitle}>
-          Historial de incidencias enviadas
-        </Text>
-      </View>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Mis Reportes</Text>
+            <Text style={styles.headerSubtitle}>
+              {activeAlerts.length + archivedAlerts.length > 0
+                ? `${activeAlerts.length} activos · ${archivedAlerts.length} archivados`
+                : 'Historial de incidencias'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.dateFilterTrigger,
+              dateFilter !== 'ALL' && styles.dateFilterTriggerActive,
+            ]}
+            onPress={openDateModal}
+            activeOpacity={0.8}
+            accessibilityLabel="Filtrar por fecha"
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={dateFilter !== 'ALL' ? '#fff' : '#264653'}
+            />
+            <Text
+              style={[
+                styles.dateFilterTriggerText,
+                dateFilter !== 'ALL' && styles.dateFilterTriggerTextActive,
+              ]}
+            >
+              {getDateFilterBadge()}
+            </Text>
+            {dateFilter !== 'ALL' ? (
+              <View style={styles.dateFilterActiveDot} />
+            ) : null}
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.filterContainer}>
         <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={20} color="#777" />
+          <Ionicons name="search-outline" size={18} color="#777" />
           <TextInput
             style={styles.searchInput}
             value={searchText}
             onChangeText={setSearchText}
-            placeholder="Buscar por categoría, descripción o dirección"
+            placeholder="Buscar por categoría, dirección..."
             placeholderTextColor="#8A8F98"
             returnKeyType="search"
             clearButtonMode="while-editing"
@@ -763,11 +842,15 @@ export default function MyReportsScreen({
             <TouchableOpacity
               onPress={() => setSearchText('')}
               accessibilityLabel="Limpiar búsqueda"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="close-circle" size={20} color="#777" />
+              <Ionicons name="close-circle" size={18} color="#777" />
             </TouchableOpacity>
           ) : null}
         </View>
+      </View>
+
+      <View style={styles.filterBar}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -788,6 +871,7 @@ export default function MyReportsScreen({
                 filter === filterOption && styles.filterChipActive,
               ]}
               onPress={() => handleFilterChange(filterOption)}
+              activeOpacity={0.75}
             >
               <Text
                 style={[
@@ -819,68 +903,6 @@ export default function MyReportsScreen({
             </TouchableOpacity>
           ))}
         </ScrollView>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterContentContainer}
-          style={styles.dateFilterRow}
-        >
-          {([
-            ['ALL', 'Todas las fechas'],
-            ['TODAY', 'Hoy'],
-            ['LAST_7_DAYS', '7 días'],
-            ['LAST_30_DAYS', '30 días'],
-            ['CUSTOM', 'Rango'],
-          ] as const).map(([dateOption, label]) => (
-            <TouchableOpacity
-              key={dateOption}
-              style={[
-                styles.dateFilterChip,
-                dateFilter === dateOption && styles.dateFilterChipActive,
-              ]}
-              onPress={() => setDateFilter(dateOption)}
-            >
-              <Text
-                style={[
-                  styles.dateFilterText,
-                  dateFilter === dateOption && styles.dateFilterTextActive,
-                ]}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        {dateFilter === 'CUSTOM' ? (
-          <View>
-            <View style={styles.customDateContainer}>
-            <TextInput
-              style={styles.dateInput}
-              value={customStartDate}
-              onChangeText={setCustomStartDate}
-              placeholder="Desde AAAA-MM-DD"
-              placeholderTextColor="#8A8F98"
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-            />
-            <Text style={styles.dateSeparator}>-</Text>
-            <TextInput
-              style={styles.dateInput}
-              value={customEndDate}
-              onChangeText={setCustomEndDate}
-              placeholder="Hasta AAAA-MM-DD"
-              placeholderTextColor="#8A8F98"
-              keyboardType="numbers-and-punctuation"
-              maxLength={10}
-            />
-            </View>
-            {hasInvalidCustomDate ? (
-              <Text style={styles.dateValidationText}>
-                Ingresa fechas válidas y asegúrate de que el inicio no sea posterior al final.
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
       </View>
 
       {loading ? (
@@ -919,6 +941,126 @@ export default function MyReportsScreen({
           ListEmptyComponent={renderEmptyComponent}
         />
       )}
+
+      <Modal
+        visible={isDateModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDateModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setIsDateModalVisible(false)}
+        >
+          <Pressable
+            style={styles.modalSheet}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalTitle}>Filtrar por Fecha</Text>
+                <Text style={styles.modalSubtitle}>
+                  Selecciona el período de tus reportes
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsDateModalVisible(false)}
+                style={styles.modalCloseButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalOptionsContainer}>
+              {([
+                ['ALL', 'Todas las fechas', 'Historial completo de reportes'],
+                ['TODAY', 'Hoy', 'Reportes emitidos hoy'],
+                ['LAST_7_DAYS', 'Últimos 7 días', 'Actividad de la última semana'],
+                ['LAST_30_DAYS', 'Últimos 30 días', 'Actividad del último mes'],
+                ['CUSTOM', 'Rango personalizado', 'Filtrar entre dos fechas'],
+              ] as const).map(([option, title, desc]) => {
+                const isSelected = tempDateFilter === option;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.modalOptionCard,
+                      isSelected && styles.modalOptionCardSelected,
+                    ]}
+                    onPress={() => setTempDateFilter(option)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.modalOptionInfo}>
+                      <Text
+                        style={[
+                          styles.modalOptionTitle,
+                          isSelected && styles.modalOptionTitleSelected,
+                        ]}
+                      >
+                        {title}
+                      </Text>
+                      <Text style={styles.modalOptionDesc}>{desc}</Text>
+                    </View>
+                    <Ionicons
+                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={isSelected ? '#E63946' : '#999'}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {tempDateFilter === 'CUSTOM' ? (
+              <View style={styles.modalCustomRangeBox}>
+                <Text style={styles.modalCustomLabel}>
+                  Fechas (formato AAAA-MM-DD):
+                </Text>
+                <View style={styles.modalCustomInputsRow}>
+                  <TextInput
+                    style={styles.modalDateInput}
+                    value={tempCustomStartDate}
+                    onChangeText={setTempCustomStartDate}
+                    placeholder="Desde AAAA-MM-DD"
+                    placeholderTextColor="#8A8F98"
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                  <Text style={styles.modalDateRangeSeparator}>al</Text>
+                  <TextInput
+                    style={styles.modalDateInput}
+                    value={tempCustomEndDate}
+                    onChangeText={setTempCustomEndDate}
+                    placeholder="Hasta AAAA-MM-DD"
+                    placeholderTextColor="#8A8F98"
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalResetButton}
+                onPress={resetDateFilter}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalResetButtonText}>Restablecer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalApplyButton}
+                onPress={applyDateFilter}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalApplyButtonText}>Aplicar Filtro</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -929,138 +1071,280 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   header: {
-    padding: 20,
     backgroundColor: '#fff',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    zIndex: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    marginRight: 12,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A1D20',
+    letterSpacing: -0.3,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
+    fontSize: 12,
+    color: '#6C757D',
+    marginTop: 2,
+    fontWeight: '500',
   },
-  filterContainer: {
+  dateFilterTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2F6',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  dateFilterTriggerActive: {
+    backgroundColor: '#E63946',
+  },
+  dateFilterTriggerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#264653',
+    marginLeft: 5,
+  },
+  dateFilterTriggerTextActive: {
+    color: '#fff',
+  },
+  dateFilterActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    marginLeft: 6,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f2f5',
-    borderRadius: 10,
-    marginHorizontal: 15,
-    marginBottom: 10,
+    backgroundColor: '#F4F6F8',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    minHeight: 44,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
   },
   searchInput: {
     flex: 1,
-    color: '#333',
-    fontSize: 14,
+    color: '#212529',
+    fontSize: 13,
     marginHorizontal: 8,
+    paddingVertical: 6,
+  },
+  filterBar: {
+    backgroundColor: '#fff',
     paddingVertical: 8,
-  },
-  dateFilterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 18,
-    backgroundColor: '#f0f2f5',
-    marginRight: 8,
-  },
-  dateFilterRow: {
-    marginTop: 8,
-  },
-  dateFilterChipActive: {
-    backgroundColor: '#264653',
-  },
-  dateFilterText: {
-    color: '#59636E',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  dateFilterTextActive: {
-    color: '#fff',
-  },
-  customDateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 15,
-    marginTop: 4,
-  },
-  dateInput: {
-    flex: 1,
-    minHeight: 38,
-    borderWidth: 1,
-    borderColor: '#D5D9DE',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    color: '#333',
-    fontSize: 12,
-  },
-  dateSeparator: {
-    marginHorizontal: 8,
-    color: '#667085',
-    fontWeight: 'bold',
-  },
-  dateValidationText: {
-    color: '#B42318',
-    fontSize: 11,
-    marginHorizontal: 15,
-    marginTop: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 2,
   },
   filterContentContainer: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    marginRight: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F4F6F8',
+    marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: '#333',
+    backgroundColor: '#264653',
   },
   filterText: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: 'bold',
+    fontSize: 12,
+    color: '#59636E',
+    fontWeight: '700',
   },
   filterTextActive: {
     color: '#fff',
   },
   filterCount: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
-    paddingHorizontal: 5,
-    backgroundColor: '#fff',
+    marginLeft: 6,
+    paddingHorizontal: 4,
+    backgroundColor: '#E5E9EF',
   },
   filterCountActive: {
     backgroundColor: '#E63946',
   },
   filterCountText: {
-    color: '#666',
-    fontSize: 11,
-    fontWeight: 'bold',
+    color: '#495057',
+    fontSize: 10,
+    fontWeight: '800',
   },
   filterCountTextActive: {
+    color: '#fff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    maxHeight: '85%',
+  },
+  modalHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D0D5DD',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1A1D20',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#6C757D',
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: '#F4F6F8',
+  },
+  modalOptionsContainer: {
+    marginBottom: 12,
+  },
+  modalOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    backgroundColor: '#FAFBFC',
+    marginBottom: 8,
+  },
+  modalOptionCardSelected: {
+    borderColor: '#E63946',
+    backgroundColor: '#FFF8F8',
+  },
+  modalOptionInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  modalOptionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#343A40',
+  },
+  modalOptionTitleSelected: {
+    color: '#E63946',
+  },
+  modalOptionDesc: {
+    fontSize: 11,
+    color: '#6C757D',
+    marginTop: 2,
+  },
+  modalCustomRangeBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  modalCustomLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#495057',
+    marginBottom: 8,
+  },
+  modalCustomInputsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalDateInput: {
+    flex: 1,
+    minHeight: 38,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#CED4DA',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 12,
+    color: '#212529',
+  },
+  modalDateRangeSeparator: {
+    marginHorizontal: 8,
+    color: '#6C757D',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  modalResetButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#F1F3F5',
+    marginRight: 8,
+  },
+  modalResetButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#495057',
+  },
+  modalApplyButton: {
+    flex: 2,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#E63946',
+    marginLeft: 8,
+  },
+  modalApplyButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: '#fff',
   },
   centerContainer: {
