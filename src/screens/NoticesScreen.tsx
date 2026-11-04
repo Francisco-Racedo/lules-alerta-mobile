@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
   Modal, TextInput, ScrollView, Linking, Share, Image, RefreshControl,
@@ -94,10 +94,12 @@ export default function NoticesScreen({
   const [barrioModalVisible, setBarrioModalVisible] = useState(false);
   const [sourceModalVisible, setSourceModalVisible] = useState(false);
   const [searchBarrio, setSearchBarrio] = useState('');
+  const hasLoadedRef = useRef(false);
 
   useFocusEffect(
     React.useCallback(() => {
-      void loadUserAndNotices();
+      const showSpinner = !hasLoadedRef.current;
+      void loadUserAndNotices(showSpinner);
     }, [selectedBarrio, selectedSource])
   );
 
@@ -132,9 +134,11 @@ export default function NoticesScreen({
     return () => subscription.remove();
   }, [barrioModalVisible, galleryVisible, selectedNotice, sourceModalVisible]);
 
-  const loadUserAndNotices = async (isRefresh = false) => {
+  const loadUserAndNotices = async (showSpinner = false, isRefresh = false) => {
     try {
-      setLoading(true);
+      if (showSpinner) {
+        setLoading(true);
+      }
       setRefreshing(isRefresh);
       setErrorMessage(null);
       const storedData = await AsyncStorage.getItem('userData');
@@ -185,6 +189,7 @@ export default function NoticesScreen({
     } finally {
       setLoading(false);
       setRefreshing(false);
+      hasLoadedRef.current = true;
     }
   };
 
@@ -718,7 +723,7 @@ export default function NoticesScreen({
         <View style={styles.centerContainer}>
           <Ionicons name="cloud-offline-outline" size={60} color="#ccc" />
           <Text style={styles.emptyText}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => void loadUserAndNotices()}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => void loadUserAndNotices(true, false)}>
             <Text style={styles.retryButtonText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
@@ -746,7 +751,7 @@ export default function NoticesScreen({
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => void loadUserAndNotices(true)}
+              onRefresh={() => void loadUserAndNotices(false, true)}
               colors={['#E63946']}
             />
           }
@@ -773,12 +778,25 @@ export default function NoticesScreen({
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar barrio en Lules..."
-              value={searchBarrio}
-              onChangeText={setSearchBarrio}
-            />
+            <View style={styles.modalSearchBox}>
+              <Ionicons name="search-outline" size={18} color="#64748B" />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Buscar barrio en Lules..."
+                placeholderTextColor="#64748B"
+                value={searchBarrio}
+                onChangeText={setSearchBarrio}
+                autoCapitalize="words"
+              />
+              {searchBarrio.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => setSearchBarrio('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
 
             <FlatList
               data={filteredBarriosList}
@@ -1391,7 +1409,24 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   detailActions: { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
-  searchInput: { backgroundColor: '#f0f2f5', borderRadius: 10, paddingHorizontal: 15, height: 45, fontSize: 15, marginBottom: 15, color: '#333' },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    marginBottom: 14,
+  },
+  modalSearchInput: {
+    flex: 1,
+    color: '#1E293B',
+    fontSize: 14,
+    marginHorizontal: 8,
+    paddingVertical: 8,
+  },
   barrioOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   barrioOptionText: { fontSize: 16, color: '#333', marginLeft: 12 },
 });
