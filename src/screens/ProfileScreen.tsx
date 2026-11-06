@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,15 +9,24 @@ import {
   unregisterDeviceForPushNotifications,
 } from '../services/pushNotifications';
 
-export default function ProfileScreen({ navigation }: any) {
+type ProfileNavigation = {
+  navigate: (screen: 'EditProfile') => void;
+  reset: (state: { index: number; routes: { name: string }[] }) => void;
+};
+
+export default function ProfileScreen({ navigation }: { navigation: ProfileNavigation }) {
+  const insets = useSafeAreaInsets();
   const [userData, setUserData] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
 
   useFocusEffect(
     React.useCallback(() => {
       const loadUserData = async () => {
         try {
-          setLoading(true);
+          if (!hasLoadedRef.current) {
+            setLoading(true);
+          }
           const data = await AsyncStorage.getItem('userData');
           if (data) {
             setUserData(JSON.parse(data) as AuthUser);
@@ -26,9 +35,10 @@ export default function ProfileScreen({ navigation }: any) {
           console.error('Error al cargar datos del usuario', error);
         } finally {
           setLoading(false);
+          hasLoadedRef.current = true;
         }
       };
-      loadUserData();
+      void loadUserData();
     }, [])
   );
 
@@ -71,7 +81,7 @@ export default function ProfileScreen({ navigation }: any) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#E63946" />
         </View>
@@ -80,8 +90,14 @@ export default function ProfileScreen({ navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView 
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 28, 44) }
+        ]} 
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.profileHero}>
         {userData?.fotoPerfil ? (
           <Image source={renderAvatarSource()} style={styles.avatarImage} />
