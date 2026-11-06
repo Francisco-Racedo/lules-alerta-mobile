@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, ScrollView, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { AuthUser, getAssetUrl } from '../services/auth';
+import { AuthUser, getCurrentUser, getAssetUrl } from '../services/auth';
 import {
   unregisterDeviceForPushNotifications,
 } from '../services/pushNotifications';
@@ -27,9 +27,20 @@ export default function ProfileScreen({ navigation }: { navigation: ProfileNavig
           if (!hasLoadedRef.current) {
             setLoading(true);
           }
+          // 1. Carga inmediata local para evitar esperas
           const data = await AsyncStorage.getItem('userData');
           if (data) {
             setUserData(JSON.parse(data) as AuthUser);
+          }
+
+          // 2. Sincronización silenciosa en segundo plano con el backend
+          const token = await AsyncStorage.getItem('userToken');
+          if (token) {
+            const freshUser = await getCurrentUser(token);
+            if (freshUser) {
+              setUserData(freshUser);
+              await AsyncStorage.setItem('userData', JSON.stringify(freshUser));
+            }
           }
         } catch (error) {
           console.error('Error al cargar datos del usuario', error);
@@ -41,6 +52,22 @@ export default function ProfileScreen({ navigation }: { navigation: ProfileNavig
       void loadUserData();
     }, [])
   );
+
+  const handleCall = async (phone: string) => {
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    if (!cleanPhone) return;
+    const url = `tel:${cleanPhone}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        await Linking.openURL(`tel:${phone}`);
+      }
+    } catch (error) {
+      console.error('Error al realizar llamada de emergencia:', error);
+    }
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -99,34 +126,39 @@ export default function ProfileScreen({ navigation }: { navigation: ProfileNavig
         showsVerticalScrollIndicator={false}
       >
       <View style={styles.profileHero}>
-        {userData?.fotoPerfil ? (
-          <Image source={renderAvatarSource()} style={styles.avatarImage} />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Ionicons name="person" size={52} color="#264653" />
-          </View>
-        )}
+        <View style={styles.avatarWrapper}>
+          {userData?.fotoPerfil ? (
+            <Image source={renderAvatarSource()} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Ionicons name="person" size={50} color="#264653" />
+            </View>
+          )}
+        </View>
         
         <Text style={styles.name}>{userData?.nombre || 'Sin nombre registrado'}</Text>
+        <Text style={styles.documentText}>DNI {userData?.dni || 'Sin DNI registrado'}</Text>
         
-        <Text style={styles.documentText}>DNI: {userData?.dni || 'Sin DNI registrado'}</Text>
         <View style={styles.profileStatus}>
-          <Ionicons name="checkmark-circle" size={16} color="#B7E4C7" />
-          <Text style={styles.profileStatusText}>Cuenta verificada</Text>
+          <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+          <Text style={styles.profileStatusText}>Ciudadano Verificado</Text>
         </View>
       </View>
 
       <View style={styles.infoCard}>
         <View style={styles.cardTitleRow}>
           <View style={[styles.cardTitleIcon, styles.personalIcon]}>
-            <Ionicons name="person-outline" size={18} color="#264653" />
+            <Ionicons name="person-outline" size={18} color="#1D70B8" />
           </View>
           <Text style={styles.sectionTitle}>Información personal</Text>
         </View>
-        <ProfileRow icon="call-outline" value={userData?.telefono || 'Sin teléfono registrado'} />
-        <ProfileRow icon="mail-outline" value={userData?.email || 'Sin correo registrado'} />
-        <ProfileRow icon="location-outline" value={userData?.direccion || 'Sin dirección registrada'} />
-        <ProfileRow icon="navigate-outline" value={userData?.barrio || 'Sin barrio registrado'} />
+        <ProfileRow icon="call-outline" label="Teléfono personal" value={userData?.telefono || 'Sin teléfono registrado'} />
+        <View style={styles.rowDivider} />
+        <ProfileRow icon="mail-outline" label="Correo electrónico" value={userData?.email || 'Sin correo registrado'} />
+        <View style={styles.rowDivider} />
+        <ProfileRow icon="location-outline" label="Dirección registrada" value={userData?.direccion || 'Sin dirección registrada'} />
+        <View style={styles.rowDivider} />
+        <ProfileRow icon="navigate-outline" label="Barrio" value={userData?.barrio || 'Sin barrio registrado'} />
       </View>
 
       <View style={styles.infoCard}>
@@ -138,14 +170,21 @@ export default function ProfileScreen({ navigation }: { navigation: ProfileNavig
         </View>
         <ProfileRow
           icon="person-outline"
+          label="Contacto de emergencia"
           value={userData?.contactoEmergenciaNombre || 'Sin contacto de emergencia'}
         />
+        <View style={styles.rowDivider} />
         <ProfileRow
           icon="call-outline"
+          label="Teléfono de emergencia"
           value={userData?.contactoEmergenciaTelefono || 'Sin teléfono de emergencia'}
+          onPressAction={userData?.contactoEmergenciaTelefono ? () => handleCall(userData.contactoEmergenciaTelefono!) : undefined}
+          actionIcon={userData?.contactoEmergenciaTelefono ? 'call' : undefined}
         />
+        <View style={styles.rowDivider} />
         <ProfileRow
-          icon="medkit-outline"
+          icon="document-text-outline"
+          label="Ficha médica / Alergias"
           value={userData?.datosMedicos || 'Sin datos médicos registrados'}
           multiline
         />
@@ -154,13 +193,18 @@ export default function ProfileScreen({ navigation }: { navigation: ProfileNavig
       <TouchableOpacity 
         style={styles.editButton} 
         onPress={() => navigation.navigate('EditProfile')}
+        activeOpacity={0.85}
       >
-        <Ionicons name="pencil-outline" size={24} color="#fff" style={styles.buttonIcon} />
+        <Ionicons name="create-outline" size={20} color="#fff" style={styles.buttonIcon} />
         <Text style={styles.buttonText}>EDITAR PERFIL</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={24} color="#E63946" style={styles.buttonIcon} />
+      <TouchableOpacity 
+        style={styles.logoutButton} 
+        onPress={handleLogout}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="log-out-outline" size={20} color="#DC2626" style={styles.buttonIcon} />
         <Text style={styles.logoutText}>CERRAR SESIÓN</Text>
       </TouchableOpacity>
       </ScrollView>
@@ -170,46 +214,132 @@ export default function ProfileScreen({ navigation }: { navigation: ProfileNavig
 
 function ProfileRow({
   icon,
+  label,
   value,
   multiline = false,
+  onPressAction,
+  actionIcon,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
+  label: string;
   value: string;
   multiline?: boolean;
+  onPressAction?: () => void;
+  actionIcon?: keyof typeof Ionicons.glyphMap;
 }) {
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoIcon}>
-        <Ionicons name={icon} size={19} color="#52757A" />
+        <Ionicons name={icon} size={18} color="#1D70B8" />
       </View>
-      <Text style={styles.infoText} numberOfLines={multiline ? 3 : 1}>{value}</Text>
+      <View style={styles.infoTextContainer}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoText} numberOfLines={multiline ? 4 : 1}>
+          {value}
+        </Text>
+      </View>
+      {onPressAction && actionIcon ? (
+        <TouchableOpacity 
+          style={styles.rowActionBtn} 
+          onPress={onPressAction} 
+          activeOpacity={0.8}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Llamar a ${label}`}
+        >
+          <Ionicons name={actionIcon} size={16} color="#E63946" />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  profileHero: { alignItems: 'center', backgroundColor: '#264653', borderRadius: 24, paddingTop: 24, paddingBottom: 22, marginBottom: 18, elevation: 5, shadowColor: '#264653', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-  avatarImage: { width: 104, height: 104, borderRadius: 52, borderWidth: 4, borderColor: '#fff' },
-  avatarFallback: { width: 104, height: 104, borderRadius: 52, backgroundColor: '#E9F5F4', alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: '#fff' },
-  name: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginTop: 12, textTransform: 'capitalize' },
-  documentText: { fontSize: 15, color: '#DDEBEA', fontWeight: '600', marginTop: 6 },
-  profileStatus: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
-  profileStatusText: { fontSize: 12, color: '#B7E4C7', fontWeight: '700', marginLeft: 5 },
-  infoCard: { backgroundColor: '#fff', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E7EEF0', elevation: 3, shadowColor: '#264653', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 5 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  cardTitleIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  personalIcon: { backgroundColor: '#E9F5F4' },
-  emergencyIcon: { backgroundColor: '#FFF0ED' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, width: '100%' },
-  infoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F3F6F7', alignItems: 'center', justifyContent: 'center' },
-  infoText: { fontSize: 15, color: '#263238', marginLeft: 12, flex: 1, fontWeight: '600' },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#264653' },
-  editButton: { backgroundColor: '#E63946', flexDirection: 'row', borderRadius: 14, height: 56, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 3, shadowColor: '#E63946', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5 },
-  logoutButton: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E63946', flexDirection: 'row', borderRadius: 14, height: 54, alignItems: 'center', justifyContent: 'center' },
-  buttonIcon: { marginRight: 10 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  logoutText: { color: '#E63946', fontSize: 16, fontWeight: 'bold' }
+  
+  profileHero: { 
+    alignItems: 'center', 
+    backgroundColor: '#264653', 
+    borderRadius: 24, 
+    paddingTop: 24, 
+    paddingBottom: 22, 
+    marginBottom: 16, 
+    elevation: 4, 
+    shadowColor: '#264653', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.18, 
+    shadowRadius: 8 
+  },
+  avatarWrapper: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 3.5, borderColor: '#fff' },
+  avatarFallback: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#E9F5F4', alignItems: 'center', justifyContent: 'center', borderWidth: 3.5, borderColor: '#fff' },
+  name: { fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 12, letterSpacing: -0.3, textTransform: 'capitalize' },
+  documentText: { fontSize: 14, color: '#DDEBEA', fontWeight: '600', marginTop: 4 },
+  profileStatus: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 5, marginTop: 12 },
+  profileStatusText: { fontSize: 12, color: '#A7F3D0', fontWeight: '800', marginLeft: 5, letterSpacing: 0.2 },
+  
+  infoCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: 18, 
+    padding: 16, 
+    marginBottom: 14, 
+    borderWidth: 1, 
+    borderColor: '#ECEFF1', 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.04, 
+    shadowRadius: 5 
+  },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  cardTitleIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  personalIcon: { backgroundColor: '#EBF3FC' },
+  emergencyIcon: { backgroundColor: '#FEF2F2' },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#1E293B', letterSpacing: -0.2 },
+  
+  infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, width: '100%' },
+  infoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  infoTextContainer: { flex: 1, marginLeft: 12 },
+  infoLabel: { fontSize: 11, color: '#64748B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  infoText: { fontSize: 14, color: '#1E293B', fontWeight: '600', lineHeight: 20 },
+  rowDivider: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 46, marginVertical: 2 },
+  rowActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  
+  editButton: { 
+    backgroundColor: '#1D70B8', 
+    flexDirection: 'row', 
+    borderRadius: 14, 
+    height: 52, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 12, 
+    marginTop: 6,
+    elevation: 2, 
+    shadowColor: '#1D70B8', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 4 
+  },
+  logoutButton: { 
+    backgroundColor: '#FEF2F2', 
+    borderWidth: 1, 
+    borderColor: '#FECACA', 
+    flexDirection: 'row', 
+    borderRadius: 14, 
+    height: 52, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 8 
+  },
+  buttonIcon: { marginRight: 8 },
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+  logoutText: { color: '#DC2626', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
 });
