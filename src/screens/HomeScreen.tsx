@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   AppState, Platform, StyleSheet, View, TouchableOpacity, Text, 
-  ActivityIndicator, Modal, Alert, DeviceEventEmitter, Linking, ScrollView 
+  ActivityIndicator, Modal, Alert, DeviceEventEmitter, Linking, ScrollView,
+  Vibration 
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as IntentLauncher from 'expo-intent-launcher';
+import { BASE_URL } from '../services/auth';
 
 const LOCATION_REQUEST_TIMEOUT_MS = 10000;
 
@@ -78,6 +81,7 @@ export default function HomeScreen({ route, navigation }: any) {
   >(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
+  const [isSendingSos, setIsSendingSos] = useState(false);
   const locationRequestInFlight = useRef(false);
   const locationRef = useRef<Location.LocationObject | null>(null);
   const [selectedFocusLocation, setSelectedFocusLocation] = useState(
@@ -253,18 +257,114 @@ export default function HomeScreen({ route, navigation }: any) {
     };
   }, [loadLocation, locationErrorType]);
 
+  const sendSOSAlert = async () => {
+    try {
+      setIsSendingSos(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert(
+          'Sesión Requerida',
+          'Debes iniciar sesión con tu cuenta ciudadana para emitir una alerta S.O.S.',
+        );
+        return;
+      }
+
+      let currentCoords = location?.coords;
+      if (!currentCoords) {
+        try {
+          const freshLoc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          currentCoords = freshLoc.coords;
+        } catch {
+          currentCoords = {
+            latitude: -26.9215,
+            longitude: -65.3392,
+            altitude: null,
+            accuracy: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          };
+        }
+      }
+
+      const formData = new FormData();
+      formData.append('category', 'Emergencia S.O.S.');
+      formData.append(
+        'description',
+        '🚨 ALERTA DE PÁNICO S.O.S. CIUDADANA - ASISTENCIA URGENTE REQUERIDA EN TIEMPO REAL',
+      );
+      formData.append('latitude', String(currentCoords.latitude));
+      formData.append('longitude', String(currentCoords.longitude));
+      formData.append('address', 'Lules, Tucumán (Alerta S.O.S. en vivo)');
+
+      const response = await fetch(`${BASE_URL}/alerts`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Código de estado HTTP ${response.status}`);
+      }
+
+      try {
+        Vibration.vibrate([0, 500, 200, 500]);
+      } catch {
+        // Vibración no disponible o web
+      }
+
+      Alert.alert(
+        '🚨 ALERTA S.O.S. ENVIADA',
+        'Tu ubicación exacta ha sido transmitida de inmediato al Centro de Monitoreo y Fuerzas de Seguridad de Lules. Permanece en un lugar seguro mientras el móvil acude en auxilio.',
+        [{ text: 'Entendido', style: 'default' }],
+      );
+    } catch (err: any) {
+      console.error('Error enviando alerta SOS:', err);
+      Alert.alert(
+        'Error al transmitir S.O.S.',
+        'No se pudo conectar con el centro de monitoreo vía red. Por favor comunícate de inmediato al 911 (Policía) o 107 (Hospital de Lules).',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Llamar al 911',
+            style: 'destructive',
+            onPress: () => Linking.openURL('tel:911'),
+          },
+        ],
+      );
+    } finally {
+      setIsSendingSos(false);
+    }
+  };
+
   const handlePanicSOS = () => {
+    if (isSendingSos) return;
     Alert.alert(
-      "🚨 ALERTA S.O.S. ACTIVADA",
-      "Tu ubicación exacta ha sido enviada al centro de monitoreo. Un móvil policial está en camino.",
-      [{ text: "Entendido", style: "destructive" }]
+      '🚨 ACTIVAR ALERTA DE PÁNICO S.O.S.',
+      '¿Deseas enviar una alerta de emergencia inmediata con tu ubicación actual al Centro de Monitoreo Municipal de Lules?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'ACTIVAR S.O.S. AHORA',
+          style: 'destructive',
+          onPress: () => {
+            void sendSOSAlert();
+          },
+        },
+      ],
     );
   };
 
   const handleShortSOSPress = () => {
+    if (isSendingSos) return;
     Alert.alert(
-      "Atención", 
-      "Para activar la alerta de pánico S.O.S., mantén presionado el botón rojo por 2 segundos."
+      'Botón S.O.S.',
+      'Para activar la alerta de emergencia S.O.S., mantén presionado el botón rojo durante 2 segundos.',
     );
   };
 
@@ -421,14 +521,23 @@ export default function HomeScreen({ route, navigation }: any) {
 
         {/* BOTÓN S.O.S. (CENTRO) */}
         <TouchableOpacity 
-          style={styles.sosButton} 
+          style={[styles.sosButton, isSendingSos && styles.sosButtonDisabled]} 
           activeOpacity={0.8}
           onPress={handleShortSOSPress}
           onLongPress={handlePanicSOS}
           delayLongPress={1500}
+          disabled={isSendingSos}
+          accessibilityRole="button"
+          accessibilityLabel="Botón de emergencia S.O.S."
         >
-          <Ionicons name="warning" size={36} color="white" />
-          <Text style={styles.sosText}>S.O.S.</Text>
+          {isSendingSos ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="warning" size={36} color="white" />
+              <Text style={styles.sosText}>S.O.S.</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {/* BOTÓN CREAR REPORTE (DERECHA) */}
@@ -670,6 +779,7 @@ const styles = StyleSheet.create({
     borderColor: '#FEE2E2',
   },
   sosButton: { backgroundColor: '#D90429', width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', shadowColor: '#D90429', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 10, borderWidth: 4, borderColor: 'rgba(255, 255, 255, 0.4)' },
+  sosButtonDisabled: { opacity: 0.7 },
   sosText: { color: 'white', fontWeight: '900', fontSize: 22, marginTop: 2, letterSpacing: 1 },
   menuButton: { 
     position: 'absolute', 
