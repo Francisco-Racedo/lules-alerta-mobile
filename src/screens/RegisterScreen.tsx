@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ScrollView, Alert, Modal, FlatList, Keyboard, ActivityIndicator, Image 
+  Platform, Alert, Modal, FlatList, Keyboard, ActivityIndicator, Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { BASE_URL } from '../services/auth';
 import { BARRIOS_LULES } from '../constants/lules';
 
@@ -142,11 +143,8 @@ export default function RegisterScreen({ navigation }: any) {
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView 
+    <View style={styles.container}>
+      <KeyboardAwareScrollView 
         contentContainerStyle={[
           styles.scrollContent, 
           { 
@@ -154,6 +152,9 @@ export default function RegisterScreen({ navigation }: any) {
             paddingBottom: Math.max(insets.bottom + 36, 48) 
           }
         ]}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={Platform.OS === 'ios' ? 24 : 0}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -235,7 +236,7 @@ export default function RegisterScreen({ navigation }: any) {
               style={styles.input} 
               placeholder="Ej: 38123456" 
               placeholderTextColor="#94A3B8"
-              keyboardType="numeric" 
+              keyboardType="number-pad" 
               maxLength={8} 
               value={dni} 
               onChangeText={handleDniChange} 
@@ -263,7 +264,7 @@ export default function RegisterScreen({ navigation }: any) {
               style={styles.input} 
               placeholder="Ej: 3814811234" 
               placeholderTextColor="#94A3B8"
-              keyboardType="numeric" 
+              keyboardType="phone-pad" 
               maxLength={15} 
               value={telefono} 
               onChangeText={handleTelefonoChange} 
@@ -375,7 +376,7 @@ export default function RegisterScreen({ navigation }: any) {
             <Text style={styles.loginLinkAction}>Inicia sesión con tu DNI</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* MODAL OFICIAL SELECTOR DE BARRIOS DE LULES */}
       <Modal
@@ -456,7 +457,7 @@ export default function RegisterScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -581,10 +582,6 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#264653',
     backgroundColor: '#FFFFFF',
-    shadowColor: '#264653',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   inputErrorBorder: { 
     borderColor: '#DC2626', 

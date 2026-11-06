@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, ActivityIndicator, Image 
+  Platform, Keyboard, Alert, ActivityIndicator, Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   BASE_URL,
@@ -112,11 +113,8 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView 
+    <View style={styles.container}>
+      <KeyboardAwareScrollView 
         contentContainerStyle={[
           styles.scrollContent,
           {
@@ -124,6 +122,9 @@ export default function LoginScreen({ navigation }: any) {
             paddingBottom: Math.max(insets.bottom + 20, 28),
           }
         ]}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={Platform.OS === 'ios' ? 24 : 0}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -177,7 +178,7 @@ export default function LoginScreen({ navigation }: any) {
               style={styles.input}
               placeholder="Número de DNI (sin puntos)"
               placeholderTextColor="#94A3B8"
-              keyboardType="numeric"
+              keyboardType="number-pad"
               maxLength={8}
               value={dni}
               onChangeText={handleDniChange}
@@ -268,8 +269,8 @@ export default function LoginScreen({ navigation }: any) {
             <Text style={styles.registerPillText}>Crear una cuenta ciudadana</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -387,10 +388,6 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#264653',
     backgroundColor: '#FFFFFF',
-    shadowColor: '#264653',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   inputErrorBorder: { 
     borderColor: '#DC2626', 

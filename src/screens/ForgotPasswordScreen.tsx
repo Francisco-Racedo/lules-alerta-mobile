@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import {
   BASE_URL,
   fetchWithTimeout,
@@ -35,6 +34,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   const [step, setStep] = useState<'request' | 'confirm'>('request');
   const [isLoading, setIsLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const dniInputRef = useRef<any>(null);
 
   const requestCode = async () => {
     Keyboard.dismiss();
@@ -141,11 +141,8 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
+    <View style={styles.container}>
+      <KeyboardAwareScrollView
         contentContainerStyle={[
           styles.content,
           {
@@ -153,6 +150,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             paddingBottom: Math.max(insets.bottom + 32, 40),
           }
         ]}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={Platform.OS === 'ios' ? 24 : 0}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -197,11 +197,15 @@ export default function ForgotPasswordScreen({ navigation }: any) {
         <View style={styles.formCard}>
           {/* CAMPO DNI */}
           <Text style={styles.fieldLabel}>Documento Nacional de Identidad (DNI)</Text>
-          <View style={[
-            styles.inputContainer,
-            focusedInput === 'dni' && styles.inputFocused,
-            step === 'confirm' && styles.inputDisabled
-          ]}>
+          <TouchableOpacity 
+            activeOpacity={1}
+            onPress={() => dniInputRef.current?.focus()}
+            style={[
+              styles.inputContainer,
+              focusedInput === 'dni' && styles.inputFocused,
+              step === 'confirm' && styles.inputDisabled
+            ]}
+          >
             <Ionicons 
               name="card-outline" 
               size={20} 
@@ -209,19 +213,19 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               style={styles.inputIcon} 
             />
             <TextInput
+              ref={dniInputRef}
               style={[styles.input, step === 'confirm' && { color: '#64748B' }]}
               placeholder="Número de DNI (sin puntos)"
               placeholderTextColor="#94A3B8"
-              keyboardType="numeric"
+              keyboardType="number-pad"
               maxLength={8}
               value={dni}
               onChangeText={(text) => setDni(text.replace(/[^0-9]/g, ''))}
               onFocus={() => setFocusedInput('dni')}
               onBlur={() => setFocusedInput(null)}
               editable={step === 'request' && !isLoading}
-              returnKeyType="done"
             />
-          </View>
+          </TouchableOpacity>
 
           {step === 'confirm' ? (
             <>
@@ -238,7 +242,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                   style={[styles.input, { letterSpacing: 3, fontWeight: '800' }]}
                   placeholder="000000"
                   placeholderTextColor="#94A3B8"
-                  keyboardType="numeric"
+                  keyboardType="number-pad"
                   maxLength={6}
                   value={code}
                   onChangeText={(text) => setCode(text.replace(/[^0-9]/g, ''))}
@@ -361,8 +365,8 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             ¿Recordaste tu contraseña? <Text style={styles.backToLoginBold}>Iniciar sesión</Text>
           </Text>
         </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -471,10 +475,6 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#264653',
     backgroundColor: '#FFFFFF',
-    shadowColor: '#264653',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   inputDisabled: {
     backgroundColor: '#F1F5F9',
@@ -485,10 +485,10 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    height: '100%',
     fontSize: 15,
     color: '#1E293B',
     fontWeight: '600',
+    paddingVertical: 0,
   },
   eyeIcon: {
     padding: 6,
