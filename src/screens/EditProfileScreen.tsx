@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, StyleSheet, TouchableOpacity, 
   Alert, ActivityIndicator, Keyboard, Image 
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
@@ -12,7 +12,12 @@ import * as FileSystem from 'expo-file-system/legacy';
 import Toast from 'react-native-toast-message';
 import { BASE_URL, getAssetUrl } from '../services/auth';
 
-export default function EditProfileScreen({ navigation }: any) {
+type EditProfileNavigation = {
+  goBack: () => void;
+};
+
+export default function EditProfileScreen({ navigation }: { navigation: EditProfileNavigation }) {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState('');
   
@@ -244,17 +249,26 @@ export default function EditProfileScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={styles.backButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Volver atrás"
+        >
+          <Ionicons name="arrow-back" size={24} color="#1A1D20" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Editar Perfil</Text>
         <View style={styles.spacer} />
       </View>
 
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 28, 48) }
+        ]}
         enableOnAndroid={true}
         extraScrollHeight={20}
         keyboardShouldPersistTaps="handled"
