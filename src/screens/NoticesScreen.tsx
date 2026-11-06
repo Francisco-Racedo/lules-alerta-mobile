@@ -340,11 +340,25 @@ export default function NoticesScreen({
     };
   };
 
-  const handleCall = (phone: string) => {
-    Linking.openURL(`tel:${phone}`);
+  const handleCall = async (phone: string) => {
+    const cleanPhone = phone.replace(/[^0-9+]/g, '');
+    if (!cleanPhone) {
+      return;
+    }
+    const url = `tel:${cleanPhone}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        await Linking.openURL(`tel:${phone}`);
+      }
+    } catch (error) {
+      console.error('Error al realizar llamada:', error);
+    }
   };
 
-  const handleViewOnMap = (item: any) => {
+  const handleViewOnMap = (item: NoticeItem) => {
     const latitude = Number(item.latitude);
     const longitude = Number(item.longitude);
 
@@ -363,7 +377,7 @@ export default function NoticesScreen({
     navigation.navigate('Mapa', { focusLocation });
   };
 
-  const handleShare = async (item: any) => {
+  const handleShare = async (item: NoticeItem) => {
     try {
       await Share.share({
         message: `📢 *LULES ALERTA - ${item.issuer}*\n\n*${item.title}*\n📍 Zona: ${item.barrio}${item.address ? ` (${item.address})` : ''}\n\n${item.description}`,
@@ -768,7 +782,7 @@ export default function NoticesScreen({
           <View
             style={[
               styles.modalContainer,
-              { paddingBottom: Math.max(insets.bottom + 16, 28) },
+              { paddingBottom: Math.max(insets.bottom + 20, 32) },
             ]}
           >
             <View style={styles.modalHeader}>
@@ -836,7 +850,7 @@ export default function NoticesScreen({
           <View
             style={[
               styles.modalContainer,
-              { paddingBottom: Math.max(insets.bottom + 16, 28) },
+              { paddingBottom: Math.max(insets.bottom + 20, 32) },
             ]}
           >
             <View style={styles.modalHeader}>
@@ -882,7 +896,7 @@ export default function NoticesScreen({
           <View
             style={[
               styles.detailModalContainer,
-              { paddingBottom: Math.max(insets.bottom + 16, 28) },
+              { paddingBottom: Math.max(insets.bottom + 20, 32) },
             ]}
           >
             <View style={styles.modalHeader}>
