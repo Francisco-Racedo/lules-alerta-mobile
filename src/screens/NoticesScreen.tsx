@@ -735,22 +735,34 @@ export default function NoticesScreen({
         </View>
       ) : errorMessage ? (
         <View style={styles.centerContainer}>
-          <Ionicons name="cloud-offline-outline" size={60} color="#ccc" />
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="cloud-offline-outline" size={36} color="#E63946" />
+          </View>
+          <Text style={styles.emptyTitle}>Problema de conexión</Text>
           <Text style={styles.emptyText}>{errorMessage}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => void loadUserAndNotices(true, false)}>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => void loadUserAndNotices(true, false)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="refresh-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
             <Text style={styles.retryButtonText}>Reintentar</Text>
           </TouchableOpacity>
         </View>
       ) : notices.length === 0 ? (
         <View style={styles.centerContainer}>
-          <Ionicons name={emptyState.icon} size={60} color="#ccc" />
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name={emptyState.icon} size={36} color="#64748B" />
+          </View>
           <Text style={styles.emptyTitle}>{emptyState.title}</Text>
           <Text style={styles.emptyText}>{emptyState.message}</Text>
           {emptyState.showClearFilters ? (
             <TouchableOpacity
               style={styles.retryButton}
               onPress={clearNoticeFilters}
+              activeOpacity={0.85}
             >
+              <Ionicons name="close-circle-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
               <Text style={styles.retryButtonText}>Limpiar filtros</Text>
             </TouchableOpacity>
           ) : null}
@@ -900,9 +912,9 @@ export default function NoticesScreen({
             ]}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detalle del aviso</Text>
-              <TouchableOpacity onPress={() => setSelectedNotice(null)}>
-                <Ionicons name="close-circle" size={28} color="#666" />
+              <Text style={styles.modalTitle}>Detalle del Comunicado</Text>
+              <TouchableOpacity onPress={() => setSelectedNotice(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
               </TouchableOpacity>
             </View>
             {selectedNotice ? (
@@ -911,81 +923,140 @@ export default function NoticesScreen({
                 contentContainerStyle={{ paddingBottom: 24 }}
               >
                 {(() => {
+                  const sev = getSeverityStyles(selectedNotice.severity);
                   const noticeImages = Array.isArray(selectedNotice.images) && selectedNotice.images.length > 0
                     ? selectedNotice.images
                     : selectedNotice.imageUrl
                       ? [selectedNotice.imageUrl]
                       : [];
-                  return noticeImages.length > 0 ? (
-                    <>
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={() => openGallery(noticeImages, selectedImageIndex)}
-                      >
-                        <Image
-                          source={{ uri: getAssetUrl(noticeImages[selectedImageIndex]) }}
-                          style={styles.detailImage}
-                          resizeMode="contain"
-                        />
-                      </TouchableOpacity>
-                      <Text style={styles.galleryHint}>
-                        Toca la imagen para ampliar
-                      </Text>
-                      {noticeImages.length > 1 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
-                          {noticeImages.map((imageUrl: string, index: number) => (
-                            <TouchableOpacity
-                              key={imageUrl}
-                              onPress={() => setSelectedImageIndex(index)}
-                              style={[styles.thumbnailButton, index === selectedImageIndex && styles.thumbnailButtonActive]}
-                            >
-                              <Image
-                                source={{ uri: getAssetUrl(imageUrl) }}
-                                style={styles.thumbnailImage}
-                                resizeMode="cover"
-                              />
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      ) : null}
-                    </>
-                  ) : null;
-                })()}
-                <Text style={styles.noticeTitle}>{selectedNotice.title}</Text>
-                <Text style={styles.detailIssuer}>{selectedNotice.issuer}</Text>
-                <Text style={styles.detailDate}>{formatDate(selectedNotice.createdAt)}</Text>
-                {(() => {
                   const expiration = getExpirationStatus(selectedNotice.expiresAt);
-                  return expiration ? (
-                    <View style={[styles.expirationBadge, styles.detailExpirationBadge, { backgroundColor: expiration.backgroundColor }]}>
-                      <Ionicons name="time-outline" size={14} color={expiration.color} />
-                      <Text style={[styles.expirationText, { color: expiration.color }]}>{expiration.label}</Text>
-                    </View>
-                  ) : null;
+
+                  return (
+                    <>
+                      <View style={styles.detailTopRow}>
+                        <View style={styles.issuerContainer}>
+                          <Ionicons 
+                            name={selectedNotice.sourceType === 'OFICIAL' ? 'shield-checkmark' : 'people'} 
+                            size={16} 
+                            color={selectedNotice.sourceType === 'OFICIAL' ? '#1D70B8' : '#64748B'} 
+                          />
+                          <Text style={styles.issuerText} numberOfLines={1}>{selectedNotice.issuer}</Text>
+                        </View>
+
+                        <View style={[styles.severityBadge, { backgroundColor: sev.bg }]}>
+                          <View style={[styles.severityDot, { backgroundColor: sev.color }]} />
+                          <Text style={[styles.severityText, { color: sev.color }]}>{sev.label}</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.detailNoticeTitle}>{selectedNotice.title}</Text>
+
+                      <View style={styles.detailMetaRow}>
+                        <View style={styles.barrioBadge}>
+                          <Ionicons name="location-sharp" size={13} color="#E63946" />
+                          <Text style={styles.barrioBadgeText}>{selectedNotice.barrio}</Text>
+                        </View>
+                        <View style={styles.dateMeta}>
+                          <Ionicons name="time-outline" size={13} color="#8A92A6" />
+                          <Text style={styles.dateText}>{formatDate(selectedNotice.createdAt)}</Text>
+                        </View>
+                      </View>
+
+                      {expiration ? (
+                        <View style={[styles.expirationBadge, styles.detailExpirationBadge, { backgroundColor: expiration.backgroundColor }]}>
+                          <Ionicons name="alert-circle-outline" size={14} color={expiration.color} />
+                          <Text style={[styles.expirationText, { color: expiration.color }]}>{expiration.label}</Text>
+                        </View>
+                      ) : null}
+
+                      {selectedNotice.address ? (
+                        <View style={styles.detailAddressBox}>
+                          <Ionicons name="navigate-outline" size={15} color="#475569" />
+                          <Text style={styles.detailAddressText}>{selectedNotice.address}</Text>
+                        </View>
+                      ) : null}
+
+                      {noticeImages.length > 0 ? (
+                        <View style={styles.detailImageSection}>
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={() => openGallery(noticeImages, selectedImageIndex)}
+                            style={styles.detailImageWrapper}
+                          >
+                            <Image
+                              source={{ uri: getAssetUrl(noticeImages[selectedImageIndex]) }}
+                              style={styles.detailImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.detailZoomBadge}>
+                              <Ionicons name="expand-outline" size={13} color="#fff" />
+                              <Text style={styles.detailZoomText}>Tocar para ampliar</Text>
+                            </View>
+                          </TouchableOpacity>
+
+                          {noticeImages.length > 1 ? (
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
+                              {noticeImages.map((imageUrl: string, index: number) => (
+                                <TouchableOpacity
+                                  key={`${imageUrl}-${index}`}
+                                  onPress={() => setSelectedImageIndex(index)}
+                                  style={[styles.thumbnailButton, index === selectedImageIndex && styles.thumbnailButtonActive]}
+                                  activeOpacity={0.8}
+                                >
+                                  <Image
+                                    source={{ uri: getAssetUrl(imageUrl) }}
+                                    style={styles.thumbnailImage}
+                                    resizeMode="cover"
+                                  />
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      <Text style={styles.detailDescription}>{selectedNotice.description}</Text>
+
+                      <View style={styles.detailActions}>
+                        {selectedNotice.contactPhone ? (
+                          <TouchableOpacity
+                            style={[styles.detailActionBtn, styles.callBtn]}
+                            onPress={() => handleCall(selectedNotice.contactPhone!)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="call-outline" size={16} color="#E63946" />
+                            <Text style={[styles.detailActionBtnText, { color: '#E63946' }]}>
+                              Llamar ({selectedNotice.contactPhone})
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+
+                        {selectedNotice.latitude && selectedNotice.longitude ? (
+                          <TouchableOpacity
+                            style={styles.detailActionBtn}
+                            onPress={() => {
+                              setSelectedNotice(null);
+                              handleViewOnMap(selectedNotice);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="map-outline" size={16} color="#264653" />
+                            <Text style={styles.detailActionBtnText}>Ver en mapa</Text>
+                          </TouchableOpacity>
+                        ) : null}
+
+                        <TouchableOpacity
+                          style={styles.detailActionBtn}
+                          onPress={() => void handleShare(selectedNotice)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="share-social-outline" size={16} color="#475569" />
+                          <Text style={styles.detailActionBtnText}>Compartir</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  );
                 })()}
-                <Text style={styles.detailDescription}>{selectedNotice.description}</Text>
-                {selectedNotice.address ? (
-                  <Text style={styles.detailMeta}>Ubicación: {selectedNotice.address}</Text>
-                ) : null}
-                <Text style={styles.detailMeta}>Zona: {selectedNotice.barrio}</Text>
-                <View style={styles.detailActions}>
-                  {selectedNotice.latitude && selectedNotice.longitude ? (
-                    <TouchableOpacity
-                      style={styles.actionBtn}
-                      onPress={() => {
-                        setSelectedNotice(null);
-                        handleViewOnMap(selectedNotice);
-                      }}
-                    >
-                      <Ionicons name="map-outline" size={16} color="#264653" />
-                      <Text style={styles.actionBtnText}>Ver en mapa</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <TouchableOpacity style={styles.shareBtn} onPress={() => void handleShare(selectedNotice)}>
-                    <Ionicons name="share-social-outline" size={16} color="#666" />
-                    <Text style={styles.shareBtnText}>Compartir</Text>
-                  </TouchableOpacity>
-                </View>
               </ScrollView>
             ) : null}
           </View>
@@ -1159,10 +1230,32 @@ const styles = StyleSheet.create({
   },
   tabBarBadge: { backgroundColor: '#E63946', color: '#fff', fontSize: 10, fontWeight: '700' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#333', marginTop: 15, textAlign: 'center' },
-  emptyText: { fontSize: 15, color: '#666', marginTop: 15, textAlign: 'center' },
-  retryButton: { backgroundColor: '#E63946', borderRadius: 8, paddingHorizontal: 22, paddingVertical: 10, marginTop: 16 },
-  retryButtonText: { color: '#fff', fontWeight: 'bold' },
+  emptyIconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#1E293B', textAlign: 'center', marginBottom: 6 },
+  emptyText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20, maxWidth: 280 },
+  retryButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#1D70B8', 
+    borderRadius: 14, 
+    paddingHorizontal: 20, 
+    paddingVertical: 12, 
+    marginTop: 18,
+    shadowColor: '#1D70B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  retryButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   listContainer: { padding: 15 },
   card: {
     backgroundColor: '#fff',
@@ -1391,38 +1484,130 @@ const styles = StyleSheet.create({
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '75%' },
-  detailModalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  detailIssuer: { color: '#264653', fontWeight: '700', marginTop: 8, textTransform: 'uppercase' },
-  detailDate: { color: '#777', marginTop: 4 },
-  detailDescription: { color: '#333', fontSize: 16, lineHeight: 24, marginTop: 18 },
-  detailMeta: { color: '#555', marginTop: 12 },
-  detailImage: { width: '100%', height: 220, marginTop: 18, borderRadius: 10 },
-  galleryHint: { color: '#777', fontSize: 12, marginTop: 6, textAlign: 'center' },
-  galleryModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)' },
-  galleryCloseButton: { position: 'absolute', top: 44, right: 20, zIndex: 2, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
-  galleryIndicator: { position: 'absolute', top: 52, left: 20, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.55)' },
-  galleryIndicatorText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  detailModalContainer: { 
+    backgroundColor: '#fff', 
+    borderTopLeftRadius: 24, 
+    borderTopRightRadius: 24, 
+    paddingHorizontal: 20, 
+    paddingTop: 18, 
+    maxHeight: '88%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: '#1E293B', letterSpacing: -0.2 },
+  
+  detailTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  detailNoticeTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  detailMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  detailAddressBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  detailAddressText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+    marginLeft: 6,
+    flex: 1,
+  },
+  detailImageSection: {
+    marginBottom: 14,
+  },
+  detailImageWrapper: {
+    position: 'relative',
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  detailImage: { 
+    width: '100%', 
+    height: 220, 
+    borderRadius: 14,
+    backgroundColor: '#E2E8F0',
+  },
+  detailZoomBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  detailZoomText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  detailDescription: { 
+    color: '#334155', 
+    fontSize: 15, 
+    lineHeight: 23, 
+    marginBottom: 16 
+  },
+  detailActions: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap',
+    gap: 8, 
+    marginTop: 8, 
+    paddingTop: 14, 
+    borderTopWidth: 1, 
+    borderTopColor: '#F1F5F9' 
+  },
+  detailActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    flexGrow: 1,
+  },
+  detailActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginLeft: 6,
+  },
   thumbnailRow: { marginTop: 10, marginBottom: 8 },
   thumbnailButton: { marginRight: 8, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
   thumbnailButtonActive: { borderColor: '#E63946' },
   thumbnailImage: { width: 64, height: 64, borderRadius: 6 },
-  shareBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  shareBtnText: {
-    fontSize: 13,
-    color: '#475569',
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  detailActions: { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
+  galleryModal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)' },
+  galleryCloseButton: { position: 'absolute', top: 44, right: 20, zIndex: 2, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  galleryIndicator: { position: 'absolute', top: 52, left: 20, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.55)' },
+  galleryIndicatorText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   modalSearchBox: {
     flexDirection: 'row',
     alignItems: 'center',
