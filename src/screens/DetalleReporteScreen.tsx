@@ -37,6 +37,10 @@ type DetailNavigation = {
   goBack: () => void;
 };
 
+type TimelineItem =
+  | { type: 'status'; event: ReportHistoryEvent; date: string }
+  | { type: 'archived'; event: null; date: string };
+
 export default function DetalleReporteScreen({
   route,
   navigation,
@@ -89,12 +93,12 @@ export default function DetalleReporteScreen({
 
   const categoryConfig = getCategoryConfig(report.category);
 
-  const timelineEvents = [
+  const timelineEvents: TimelineItem[] = [
     ...(Array.isArray(report.history)
       ? report.history.map((event) => ({ type: 'status' as const, event, date: event.changedAt }))
       : []),
     ...(report.archivedAt
-      ? [{ type: 'archived' as const, event: null as any, date: report.archivedAt }]
+      ? [{ type: 'archived' as const, event: null, date: report.archivedAt }]
       : []),
   ].sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime());
 
@@ -304,7 +308,14 @@ export default function DetalleReporteScreen({
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} disabled={isProcessing}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+          disabled={isProcessing}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Volver atrás"
+        >
           <Ionicons name="arrow-back" size={24} color="#1A1D20" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detalle del Reporte</Text>
@@ -313,7 +324,10 @@ export default function DetalleReporteScreen({
 
       <KeyboardAwareScrollView 
         showsVerticalScrollIndicator={false} 
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 48, 64) }
+        ]}
         enableOnAndroid={true}
         extraScrollHeight={120} 
         keyboardShouldPersistTaps="handled"
@@ -368,10 +382,13 @@ export default function DetalleReporteScreen({
         <View style={styles.content}>
           <View style={styles.topRow}>
             <View style={[styles.categoryBadge, { backgroundColor: categoryConfig.backgroundColor }]}>
-              <Ionicons name={categoryConfig.icon} size={16} color={categoryConfig.color} />
-              <Text style={[styles.categoryText, { color: categoryConfig.color }]}>{report.category}</Text>
+              <Ionicons name={categoryConfig.icon} size={15} color={categoryConfig.color} />
+              <Text style={[styles.categoryText, { color: categoryConfig.color }]} numberOfLines={1}>
+                {report.category || 'General'}
+              </Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
+              <View style={styles.statusDot} />
               <Text style={styles.statusText}>{getStatusText(report.status)}</Text>
             </View>
           </View>
@@ -624,10 +641,27 @@ export default function DetalleReporteScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFBFC' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E9ECEF' },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    paddingTop: 12, 
+    paddingBottom: 12, 
+    backgroundColor: '#fff', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#E9ECEF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 2,
+    zIndex: 10,
+  },
   backButton: { padding: 8, marginLeft: -8 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#1A1D20', letterSpacing: -0.3 },
   spacer: { width: 40 },
+  scrollContent: { flexGrow: 1 },
   
   carouselContainer: { position: 'relative', backgroundColor: '#000' },
   fullImage: { width: '100%', height: 320, backgroundColor: '#111' },
@@ -644,9 +678,34 @@ const styles = StyleSheet.create({
   content: { padding: 16, marginTop: -20, backgroundColor: '#FAFBFC', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  categoryBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  categoryBadge: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 14,
+    maxWidth: '55%',
+  },
   categoryText: { fontWeight: '800', marginLeft: 6, fontSize: 12, letterSpacing: -0.2 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  statusBadge: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11, 
+    paddingVertical: 6, 
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+    marginRight: 6,
+  },
   statusText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase' },
   
   civicCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#ECEFF1', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
