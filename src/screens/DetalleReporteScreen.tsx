@@ -222,6 +222,23 @@ export default function DetalleReporteScreen({
     return new Date(dateString).toLocaleDateString('es-ES', options);
   };
 
+  const formatShortDate = (dateString?: string) => {
+    if (!dateString) return 'Fecha no disponible';
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'Fecha no disponible';
+    const dayMonth = date.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      timeZone: ARGENTINA_TIME_ZONE,
+    });
+    const time = date.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: ARGENTINA_TIME_ZONE,
+    });
+    return `${dayMonth} · ${time} hs`;
+  };
+
   const handleUpdateDescription = async () => {
     if (!editedDescription.trim()) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'La descripción no puede estar vacía.', position: 'top' });
@@ -306,7 +323,7 @@ export default function DetalleReporteScreen({
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -357,10 +374,12 @@ export default function DetalleReporteScreen({
                 ))}
               </ScrollView>
               {currentImages.length > 1 && (
-                <View style={styles.paginationContainer}>
-                  {currentImages.map((_, idx) => (
-                    <View key={idx} style={[styles.dot, currentCarouselIndex === idx && styles.activeDot]} />
-                  ))}
+                <View style={styles.paginationWrapper}>
+                  <View style={styles.paginationPill}>
+                    {currentImages.map((_, idx) => (
+                      <View key={idx} style={[styles.dot, currentCarouselIndex === idx && styles.activeDot]} />
+                    ))}
+                  </View>
                 </View>
               )}
             </>
@@ -372,14 +391,25 @@ export default function DetalleReporteScreen({
           )}
           
           {isPending && currentImages.length > 0 && (
-            <TouchableOpacity style={styles.changePhotoButton} onPress={() => handleUpdatePhoto(currentCarouselIndex)} disabled={isProcessing}>
-              <Ionicons name="camera" size={18} color="#fff" />
-              <Text style={styles.changePhotoText}>Actualizar Foto</Text>
+            <TouchableOpacity 
+              style={styles.changePhotoButton} 
+              onPress={() => handleUpdatePhoto(currentCarouselIndex)} 
+              disabled={isProcessing}
+              activeOpacity={0.8}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="camera-outline" size={16} color="#fff" />
+                  <Text style={styles.changePhotoText}>Actualizar Foto</Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
         </View>
 
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingBottom: Math.max(insets.bottom + 36, 48) }]}>
           <View style={styles.topRow}>
             <View style={[styles.categoryBadge, { backgroundColor: categoryConfig.backgroundColor }]}>
               <Ionicons name={categoryConfig.icon} size={15} color={categoryConfig.color} />
@@ -428,14 +458,14 @@ export default function DetalleReporteScreen({
                   </Marker>
                 </MapView>
                 <TouchableOpacity style={styles.floatingMapButton} onPress={handleOpenMaps} activeOpacity={0.85}>
-                  <Ionicons name="map" size={16} color="#fff" />
+                  <Ionicons name="navigate-outline" size={15} color="#fff" />
                   <Text style={styles.floatingMapText}>Abrir en Maps</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.mapErrorBox}>
-                <Ionicons name="alert-circle-outline" size={24} color="#E63946" />
-                <Text style={styles.mapErrorText}>Coordenadas no disponibles</Text>
+              <View style={styles.mapEmptyBox}>
+                <Ionicons name="location-outline" size={22} color="#94A3B8" />
+                <Text style={styles.mapEmptyText}>Ubicación geográfica no disponible en el mapa</Text>
               </View>
             )}
           </View>
@@ -509,17 +539,27 @@ export default function DetalleReporteScreen({
               </View>
               
               {resolutionImages.length > 0 && (
-                <View style={{ marginTop: 12 }}>
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.resolutionEvidenceTitle}>Evidencia fotográfica municipal:</Text>
                   <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
                     {resolutionImages.map((img: string, idx: number) => (
-                      <TouchableOpacity key={idx} activeOpacity={0.9} onPress={() => openGallery(resolutionImages, idx)} style={{ width: screenWidth - 70, height: 200 }}>
+                      <TouchableOpacity 
+                        key={idx} 
+                        activeOpacity={0.9} 
+                        onPress={() => openGallery(resolutionImages, idx)} 
+                        style={{ width: screenWidth - 64, height: 210, marginRight: 8 }}
+                      >
                         <Image source={{ uri: getAssetUrl(img) }} style={styles.resolutionImage} resizeMode="cover" />
+                        <View style={styles.zoomHintBadge}>
+                          <Ionicons name="expand-outline" size={13} color="#fff" />
+                          <Text style={styles.zoomHintText}>Tocar para ampliar</Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                   {resolutionImages.length > 1 && (
                     <Text style={styles.resolutionSwipeHint}>
-                      Desliza para ver más evidencia ({resolutionImages.length})
+                      Desliza para ver más evidencia ({resolutionImages.length} fotos)
                     </Text>
                   )}
                 </View>
@@ -555,26 +595,28 @@ export default function DetalleReporteScreen({
                               {getTimelineTitle(timelineEvent.event)}
                             </Text>
                             <Text style={styles.timelineDateTextShort}>
-                              {new Date(timelineEvent.event.changedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                              {formatShortDate(timelineEvent.event.changedAt)}
                             </Text>
                           </View>
                           
-                          {timelineEvent.event.comment && (
+                          {timelineEvent.event.comment ? (
                             <View style={styles.timelineCommentBubble}>
+                              <Ionicons name="chatbubble-outline" size={13} color="#64748B" style={{ marginRight: 6, marginTop: 2 }} />
                               <Text style={styles.timelineCommentText}>{timelineEvent.event.comment}</Text>
                             </View>
-                          )}
+                          ) : null}
                         </>
                       ) : (
                         <>
                            <View style={styles.timelineTitleRow}>
                             <Text style={[styles.timelineStatusText, { color: '#64748B' }]}>Reporte Archivado</Text>
                             <Text style={styles.timelineDateTextShort}>
-                              {new Date(timelineEvent.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                              {formatShortDate(timelineEvent.date)}
                             </Text>
                           </View>
                           <View style={styles.timelineCommentBubble}>
-                            <Text style={styles.timelineCommentText}>El reporte fue retirado de tu lista principal.</Text>
+                            <Ionicons name="information-circle-outline" size={14} color="#64748B" style={{ marginRight: 6, marginTop: 2 }} />
+                            <Text style={styles.timelineCommentText}>El reporte fue retirado de tu lista principal de seguimiento.</Text>
                           </View>
                         </>
                       )}
@@ -607,11 +649,15 @@ export default function DetalleReporteScreen({
       <Modal visible={isModalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalBackground}>
           <TouchableOpacity 
-            style={[styles.closeModalButton, { top: Math.max(insets.top + 10, 40) }]} 
+            style={[styles.closeModalButton, { top: Math.max(insets.top + 12, 44) }]} 
             onPress={() => setModalVisible(false)}
             hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar visor de fotos"
           >
-            <Ionicons name="close-circle" size={36} color="rgba(255,255,255,0.8)" />
+            <View style={styles.closeModalCircle}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </View>
           </TouchableOpacity>
           
           {modalImages.length > 0 && (
@@ -625,8 +671,10 @@ export default function DetalleReporteScreen({
               style={{ width: '100%', height: '100%' }}
               renderIndicator={(currentIndex, allSize) => 
                 allSize && allSize > 1 ? (
-                  <View style={[styles.modalPagination, { top: Math.max(insets.top + 15, 45) }]}>
-                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>{currentIndex} / {allSize}</Text>
+                  <View style={[styles.modalPagination, { top: Math.max(insets.top + 16, 48) }]}>
+                    <View style={styles.modalPaginationPill}>
+                      <Text style={styles.modalPaginationText}>{currentIndex} / {allSize}</Text>
+                    </View>
                   </View>
                 ) : <View />
               }
@@ -668,14 +716,39 @@ const styles = StyleSheet.create({
   noImageContainer: { width: '100%', height: 200, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   noImageText: { color: '#64748B', marginTop: 10, fontWeight: '600', fontSize: 13 },
   
-  paginationContainer: { position: 'absolute', bottom: 35, width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)', marginHorizontal: 4 },
-  activeDot: { backgroundColor: '#fff', width: 10, height: 10, borderRadius: 5 },
+  paginationWrapper: { position: 'absolute', bottom: 25, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  paginationPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.65)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
+  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'rgba(255,255,255,0.4)', marginHorizontal: 4 },
+  activeDot: { backgroundColor: '#fff', width: 9, height: 9, borderRadius: 4.5 },
   
-  changePhotoButton: { position: 'absolute', bottom: 25, right: 15, backgroundColor: 'rgba(15, 23, 42, 0.75)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  changePhotoButton: { 
+    position: 'absolute', 
+    bottom: 22, 
+    right: 14, 
+    backgroundColor: 'rgba(15, 23, 42, 0.85)', 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 20, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.25)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   changePhotoText: { color: '#fff', marginLeft: 6, fontWeight: '700', fontSize: 12 },
   
-  content: { padding: 16, marginTop: -20, backgroundColor: '#FAFBFC', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  content: { 
+    paddingHorizontal: 16, 
+    paddingTop: 16, 
+    marginTop: -20, 
+    backgroundColor: '#FAFBFC', 
+    borderTopLeftRadius: 24, 
+    borderTopRightRadius: 24 
+  },
   
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   categoryBadge: { 
@@ -718,10 +791,36 @@ const styles = StyleSheet.create({
   
   mapWrapper: { height: 160, borderRadius: 12, overflow: 'hidden', marginTop: 16, position: 'relative', borderWidth: 1, borderColor: '#E9ECEF' },
   miniMap: { flex: 1 },
-  floatingMapButton: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(38, 70, 83, 0.9)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 3 },
+  floatingMapButton: { 
+    position: 'absolute', 
+    bottom: 12, 
+    right: 12, 
+    backgroundColor: '#1E293B', 
+    paddingHorizontal: 13, 
+    paddingVertical: 7, 
+    borderRadius: 18, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 3, 
+    elevation: 3 
+  },
   floatingMapText: { color: '#fff', fontSize: 12, fontWeight: '700', marginLeft: 6 },
-  mapErrorBox: { height: 80, backgroundColor: '#FFF5F5', borderRadius: 12, marginTop: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#FFE3E3' },
-  mapErrorText: { color: '#E63946', fontSize: 13, fontWeight: '600', marginLeft: 8 },
+  mapEmptyBox: { 
+    height: 72, 
+    backgroundColor: '#F8FAFC', 
+    borderRadius: 12, 
+    marginTop: 16, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    flexDirection: 'row', 
+    borderWidth: 1, 
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+  },
+  mapEmptyText: { color: '#64748B', fontSize: 13, fontWeight: '500', marginLeft: 8 },
   
   descriptionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   descriptionBody: { fontSize: 15, color: '#495057', lineHeight: 24 },
@@ -745,7 +844,10 @@ const styles = StyleSheet.create({
   resolutionDateText: { fontSize: 13, color: '#64748B', marginTop: 2 },
   resolutionBodyBox: { backgroundColor: '#fff', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
   resolutionBodyText: { fontSize: 15, color: '#334155', lineHeight: 22 },
-  resolutionImage: { width: '100%', height: 200, borderRadius: 10, backgroundColor: '#E2E8F0' },
+  resolutionEvidenceTitle: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8 },
+  resolutionImage: { width: '100%', height: 210, borderRadius: 12, backgroundColor: '#E2E8F0' },
+  zoomHintBadge: { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(15, 23, 42, 0.75)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
+  zoomHintText: { color: '#fff', fontSize: 11, fontWeight: '600', marginLeft: 4 },
   resolutionSwipeHint: { textAlign: 'center', fontSize: 12, color: '#64748B', marginTop: 8, fontWeight: '600' },
   
   // FASE 3: Timeline / Historial
@@ -771,5 +873,8 @@ const styles = StyleSheet.create({
   
   modalBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   closeModalButton: { position: 'absolute', right: 20, zIndex: 10 },
+  closeModalCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   modalPagination: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 5 },
+  modalPaginationPill: { backgroundColor: 'rgba(15, 23, 42, 0.7)', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14 },
+  modalPaginationText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
