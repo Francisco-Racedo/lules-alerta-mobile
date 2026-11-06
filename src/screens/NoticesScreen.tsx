@@ -182,6 +182,7 @@ export default function NoticesScreen({
           throw new Error('La respuesta de lectura no es válida.');
         }
         setReadNoticeIds(new Set(readIds));
+        DeviceEventEmitter.emit('noticesReadUpdated');
       }
     } catch (error) {
       console.error('Error cargando avisos:', error);
@@ -406,6 +407,7 @@ export default function NoticesScreen({
       next.add(noticeId);
       return next;
     });
+    DeviceEventEmitter.emit('noticesReadUpdated');
   };
 
   const filteredBarriosList = BARRIOS_LULES.filter((b) =>

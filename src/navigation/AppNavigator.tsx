@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, DeviceEventEmitter, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  BASE_URL,
   clearSession,
+  fetchWithTimeout,
   getCurrentUser,
 } from '../services/auth';
 import { registerDeviceForPushNotifications } from '../services/pushNotifications';
@@ -35,38 +37,109 @@ const PlaceholderScreen = ({ title }: { title: string }) => (
 
 function TabNavigator() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 60 + insets.bottom;
+  const tabBarHeight = 62 + insets.bottom;
+  const [unreadNotices, setUnreadNotices] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUnread = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+
+        const [noticesRes, readRes] = await Promise.all([
+          fetchWithTimeout(`${BASE_URL}/notices`),
+          fetchWithTimeout(`${BASE_URL}/notices/read`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (noticesRes.ok && readRes.ok && isMounted) {
+          const notices: unknown = await noticesRes.json();
+          const readIds: unknown = await readRes.json();
+          if (Array.isArray(notices) && Array.isArray(readIds)) {
+            const readSet = new Set(readIds);
+            const unread = notices.filter((n: { id: string }) => !readSet.has(n.id)).length;
+            setUnreadNotices(unread);
+          }
+        }
+      } catch {
+        // Silencioso
+      }
+    };
+
+    void fetchUnread();
+    const sub = DeviceEventEmitter.addListener('noticesReadUpdated', () => {
+      void fetchUnread();
+    });
+
+    return () => {
+      isMounted = false;
+      sub.remove();
+    };
+  }, []);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#E63946',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: '#264653',
+        tabBarInactiveTintColor: '#94A3B8',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          letterSpacing: -0.2,
+          marginTop: -2,
+        },
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          borderTopWidth: 0,
+          borderTopWidth: 1,
+          borderTopColor: '#E2E8F0',
           elevation: 10,
           shadowColor: '#000',
-          shadowOpacity: 0.1,
-          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowOffset: { width: 0, height: -3 },
+          shadowRadius: 8,
           height: tabBarHeight,
+          paddingTop: 6,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
         },
-        tabBarIcon: ({ color, size }) => {
+        tabBarIcon: ({ color, focused }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'help-outline';
-          if (route.name === 'Mapa') iconName = 'map';
-          else if (route.name === 'Mis Reportes') iconName = 'list';
-          else if (route.name === 'Avisos') iconName = 'notifications';
-          else if (route.name === 'Perfil') iconName = 'person';
-          return <Ionicons name={iconName} size={size} color={color} />;
+          if (route.name === 'Mapa') {
+            iconName = focused ? 'map' : 'map-outline';
+          } else if (route.name === 'Mis Reportes') {
+            iconName = focused ? 'file-tray-full' : 'file-tray-full-outline';
+          } else if (route.name === 'Avisos') {
+            iconName = focused ? 'notifications' : 'notifications-outline';
+          } else if (route.name === 'Perfil') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+          return <Ionicons name={iconName} size={24} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Mapa" component={HomeScreen} />
-      {/* AQUÍ ESTÁ LA CLAVE: Debe apuntar a MyReportsScreen para que la pestaña muestre el listado */}
       <Tab.Screen name="Mis Reportes" component={MyReportsScreen} />
-      <Tab.Screen name="Avisos" component={NoticesScreen} />
+      <Tab.Screen 
+        name="Avisos" 
+        component={NoticesScreen} 
+        options={{
+          tabBarBadge: unreadNotices > 0 ? unreadNotices : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#DC2626',
+            color: '#fff',
+            fontSize: 10,
+            fontWeight: '800',
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            lineHeight: 16,
+            marginTop: 2,
+          },
+        }}
+      />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );

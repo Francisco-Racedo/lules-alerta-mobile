@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { AppState, Platform, StyleSheet, View, TouchableOpacity, Text, ActivityIndicator, Modal, Alert, DeviceEventEmitter } from 'react-native';
+import { 
+  AppState, Platform, StyleSheet, View, TouchableOpacity, Text, 
+  ActivityIndicator, Modal, Alert, DeviceEventEmitter, Linking, ScrollView 
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +10,64 @@ import * as Location from 'expo-location';
 import * as IntentLauncher from 'expo-intent-launcher';
 
 const LOCATION_REQUEST_TIMEOUT_MS = 10000;
+
+const EMERGENCY_CONTACTS = [
+  {
+    id: 'police',
+    name: 'Comisaría de San Isidro de Lules',
+    category: 'Seguridad',
+    phone: '3814811059',
+    shortNumber: '911 / 101',
+    description: 'Atención policial y seguridad comunal las 24 hs.',
+    icon: 'shield-checkmark' as const,
+    color: '#1D70B8',
+    bgColor: '#EBF3FC',
+  },
+  {
+    id: 'hospital',
+    name: 'Hospital de Lules',
+    category: 'Salud',
+    phone: '3814811058',
+    shortNumber: '107',
+    description: 'Guardia médica, ambulancias y emergencias de salud.',
+    icon: 'medkit' as const,
+    color: '#2A9D8F',
+    bgColor: '#E6F7F5',
+  },
+  {
+    id: 'firefighters',
+    name: 'Bomberos Voluntarios de Lules',
+    category: 'Incendios y Rescate',
+    phone: '3814811222',
+    shortNumber: '100',
+    description: 'Siniestros viales, fuego y rescate de personas.',
+    icon: 'flame' as const,
+    color: '#E76F51',
+    bgColor: '#FEF4E8',
+  },
+  {
+    id: 'gum',
+    name: 'Guardia Urbana Municipal (GUM)',
+    category: 'Seguridad Municipal',
+    phone: '3814812300',
+    shortNumber: 'Monitoreo',
+    description: 'Prevención, patrullaje comunal y monitoreo urbano.',
+    icon: 'eye' as const,
+    color: '#264653',
+    bgColor: '#E9F5F4',
+  },
+  {
+    id: 'defensa_civil',
+    name: 'Defensa Civil de Lules',
+    category: 'Contingencias',
+    phone: '103',
+    shortNumber: '103',
+    description: 'Tormentas, anegamientos y riesgo en vía pública.',
+    icon: 'warning' as const,
+    color: '#D97706',
+    bgColor: '#FEF3C7',
+  },
+];
 
 export default function HomeScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -16,6 +77,7 @@ export default function HomeScreen({ route, navigation }: any) {
     'permission' | 'services' | 'unknown' | null
   >(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
   const locationRequestInFlight = useRef(false);
   const locationRef = useRef<Location.LocationObject | null>(null);
   const [selectedFocusLocation, setSelectedFocusLocation] = useState(
@@ -211,6 +273,24 @@ export default function HomeScreen({ route, navigation }: any) {
     navigation.navigate('ReportForm', { category, location });
   };
 
+  const handleCallEmergency = (name: string, phone: string) => {
+    Alert.alert(
+      `Llamar a ${name}`,
+      `¿Deseas iniciar una llamada telefónica directa al número ${phone}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Llamar ahora',
+          onPress: () => {
+            Linking.openURL(`tel:${phone}`).catch(() => {
+              Alert.alert('Error', 'No se pudo abrir la aplicación de llamadas del dispositivo.');
+            });
+          },
+        },
+      ]
+    );
+  };
+
   // Generamos el HTML del mapa adaptándose si hay un punto a destacar o solo la posición actual
   const mapHtml = useMemo(() => {
     if (!location) return '';
@@ -328,6 +408,18 @@ export default function HomeScreen({ route, navigation }: any) {
       />
       
       <View style={styles.bottomContainer}>
+        {/* BOTÓN DIRECTORIO DE EMERGENCIAS (IZQUIERDA) */}
+        <TouchableOpacity 
+          style={styles.emergencyDirectoryButton} 
+          activeOpacity={0.8}
+          onPress={() => setEmergencyModalVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir teléfonos de emergencia de Lules"
+        >
+          <Ionicons name="call" size={24} color="#DC2626" />
+        </TouchableOpacity>
+
+        {/* BOTÓN S.O.S. (CENTRO) */}
         <TouchableOpacity 
           style={styles.sosButton} 
           activeOpacity={0.8}
@@ -339,12 +431,15 @@ export default function HomeScreen({ route, navigation }: any) {
           <Text style={styles.sosText}>S.O.S.</Text>
         </TouchableOpacity>
 
+        {/* BOTÓN CREAR REPORTE (DERECHA) */}
         <TouchableOpacity 
           style={styles.menuButton} 
           activeOpacity={0.8}
           onPress={() => setModalVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Crear nuevo reporte"
         >
-          <Ionicons name="grid" size={28} color="#333" />
+          <Ionicons name="grid" size={26} color="#264653" />
         </TouchableOpacity>
       </View>
 
@@ -437,6 +532,86 @@ export default function HomeScreen({ route, navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL DIRECTORIO DE EMERGENCIAS DE LULES (PASO 2) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={emergencyModalVisible}
+        onRequestClose={() => setEmergencyModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '82%', paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
+            {/* DRAGGER INDICATOR */}
+            <View style={styles.modalDragger} />
+
+            {/* HEADER MODAL */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTextWrapper}>
+                <View style={styles.emergencyHeaderBadge}>
+                  <Ionicons name="shield" size={13} color="#DC2626" />
+                  <Text style={styles.emergencyHeaderBadgeText}>GUARDIA Y EMERGENCIAS 24 HS</Text>
+                </View>
+                <Text style={styles.modalTitle}>Teléfonos de Lules</Text>
+                <Text style={styles.modalSubtitle}>Discado directo a dependencias y servicios locales</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setEmergencyModalVisible(false)}
+                style={styles.closeModalCircle}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar directorio de emergencias"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* LISTA DE CONTACTOS EN SCROLLVIEW */}
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 10 }}
+            >
+              {EMERGENCY_CONTACTS.map((item) => (
+                <View key={item.id} style={styles.emergencyCard}>
+                  <View style={[styles.emergencyIconBox, { backgroundColor: item.bgColor }]}>
+                    <Ionicons name={item.icon} size={22} color={item.color} />
+                  </View>
+                  <View style={styles.emergencyCardBody}>
+                    <View style={styles.emergencyCardHeaderRow}>
+                      <Text style={styles.emergencyContactName} numberOfLines={1}>{item.name}</Text>
+                      <View style={[styles.emergencyShortBadge, { backgroundColor: item.bgColor }]}>
+                        <Text style={[styles.emergencyShortText, { color: item.color }]}>{item.shortNumber}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.emergencyContactDesc} numberOfLines={2}>{item.description}</Text>
+                    <View style={styles.emergencyActionRow}>
+                      <Text style={styles.emergencyPhoneText}>Tel: {item.phone}</Text>
+                      <TouchableOpacity 
+                        style={[styles.callActionButton, { backgroundColor: item.color }]}
+                        activeOpacity={0.85}
+                        onPress={() => handleCallEmergency(item.name, item.phone)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Llamar a ${item.name}`}
+                      >
+                        <Ionicons name="call" size={13} color="#fff" style={{ marginRight: 5 }} />
+                        <Text style={styles.callActionButtonText}>Llamar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* PIE INFORMATIVO */}
+            <View style={styles.modalFooterHint}>
+              <Ionicons name="information-circle-outline" size={16} color="#64748B" />
+              <Text style={styles.modalFooterText}>
+                Las llamadas se efectúan a través de la red telefónica celular.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -476,9 +651,44 @@ const styles = StyleSheet.create({
   },
   map: { flex: 1 }, 
   bottomContainer: { position: 'absolute', bottom: 30, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  emergencyDirectoryButton: { 
+    position: 'absolute', 
+    left: 25, 
+    bottom: 30, 
+    backgroundColor: '#ffffff', 
+    width: 60, 
+    height: 60, 
+    borderRadius: 30, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    shadowColor: '#DC2626', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 6, 
+    elevation: 6,
+    borderWidth: 1.5,
+    borderColor: '#FEE2E2',
+  },
   sosButton: { backgroundColor: '#D90429', width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', shadowColor: '#D90429', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 10, borderWidth: 4, borderColor: 'rgba(255, 255, 255, 0.4)' },
   sosText: { color: 'white', fontWeight: '900', fontSize: 22, marginTop: 2, letterSpacing: 1 },
-  menuButton: { position: 'absolute', right: 25, bottom: 30, backgroundColor: '#ffffff', width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 6 },
+  menuButton: { 
+    position: 'absolute', 
+    right: 25, 
+    bottom: 30, 
+    backgroundColor: '#ffffff', 
+    width: 60, 
+    height: 60, 
+    borderRadius: 30, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.2, 
+    shadowRadius: 5, 
+    elevation: 6,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
   
   // MODAL CREAR REPORTE
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
@@ -602,5 +812,104 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginLeft: 6,
     fontWeight: '500',
+  },
+
+  // ESTILOS DIRECTORIO DE EMERGENCIAS (PASO 2)
+  emergencyHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  emergencyHeaderBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.6,
+    marginLeft: 4,
+  },
+  emergencyCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    alignItems: 'flex-start',
+  },
+  emergencyIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  emergencyCardBody: {
+    flex: 1,
+  },
+  emergencyCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  emergencyContactName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    flex: 1,
+    marginRight: 8,
+  },
+  emergencyShortBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  emergencyShortText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  emergencyContactDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  emergencyActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  emergencyPhoneText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  callActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  callActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
