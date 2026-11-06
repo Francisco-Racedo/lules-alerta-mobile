@@ -3,7 +3,17 @@
     "name": "Lules Alerta",
     "slug": "lules-alerta",
     "version": "1.0.0",
+    "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "softwareKeyboardLayoutMode": "pan",
       "googleServicesFile": "./google-services.json",
       "config": {

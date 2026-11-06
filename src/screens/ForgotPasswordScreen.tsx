@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -142,20 +143,20 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: Math.max(insets.top + 16, 24),
+            paddingTop: Math.max(insets.top + 12, 20),
             paddingBottom: Math.max(insets.bottom + 32, 40),
           }
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* BOTÓN VOLVER */}
+        {/* BOTÓN VOLVER ARRIBA A LA IZQUIERDA */}
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -167,13 +168,18 @@ export default function ForgotPasswordScreen({ navigation }: any) {
           <Ionicons name="arrow-back" size={22} color="#1E293B" />
         </TouchableOpacity>
 
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO CON LOGO OFICIAL CENTRADO */}
         <View style={styles.header}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="key-outline" size={40} color="#264653" />
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../assets/logo.png')} 
+              style={styles.logoImage} 
+              resizeMode="contain" 
+            />
           </View>
 
           <View style={styles.stepBadge}>
+            <Ionicons name="key-sharp" size={12} color="#2A9D8F" style={{ marginRight: 5 }} />
             <Text style={styles.stepBadgeText}>
               {step === 'request' ? 'PASO 1 DE 2: SOLICITUD' : 'PASO 2 DE 2: VALIDACIÓN'}
             </Text>
@@ -213,6 +219,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
               onFocus={() => setFocusedInput('dni')}
               onBlur={() => setFocusedInput(null)}
               editable={step === 'request' && !isLoading}
+              returnKeyType="done"
             />
           </View>
 
@@ -362,51 +369,49 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F4F7F6',
   },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 22,
   },
   backButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
     elevation: 2,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#FFFFFF',
+  logoContainer: {
+    width: 105,
+    height: 105,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    shadowColor: '#264653',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 14,
+    marginBottom: 6,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   stepBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#E6F4F1',
+    borderWidth: 1,
+    borderColor: '#C7E8E2',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
@@ -420,15 +425,15 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#1E293B',
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: -0.3,
   },
   subtitle: {
-    color: '#64748B',
+    color: '#475569',
     fontSize: 13,
-    marginTop: 6,
+    marginTop: 4,
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 14,
@@ -436,15 +441,15 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 22,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 5,
   },
   fieldLabel: {
     fontSize: 13,
@@ -466,6 +471,10 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#264653',
     backgroundColor: '#FFFFFF',
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   inputDisabled: {
     backgroundColor: '#F1F5F9',
@@ -476,6 +485,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    height: '100%',
     fontSize: 15,
     color: '#1E293B',
     fontWeight: '600',
@@ -492,9 +502,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
     shadowColor: '#264653',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
   buttonDisabled: {
     backgroundColor: '#94A3B8',
@@ -525,7 +535,7 @@ const styles = StyleSheet.create({
   },
   backToLoginBtn: {
     alignItems: 'center',
-    marginTop: 22,
+    marginTop: 20,
   },
   backToLoginText: {
     fontSize: 13,

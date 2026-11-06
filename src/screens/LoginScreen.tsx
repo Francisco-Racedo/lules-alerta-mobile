@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, ActivityIndicator 
+  KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, ActivityIndicator, Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -99,7 +99,6 @@ export default function LoginScreen({ navigation }: any) {
         );
       }
 
-      // Redirección directa al mapa principal
       navigation.replace('MainTabs');
 
     } catch {
@@ -115,32 +114,31 @@ export default function LoginScreen({ navigation }: any) {
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView 
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: Math.max(insets.top + 20, 36),
-            paddingBottom: Math.max(insets.bottom + 24, 32),
+            paddingTop: Math.max(insets.top + 16, 28),
+            paddingBottom: Math.max(insets.bottom + 20, 28),
           }
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ENCABEZADO INSTITUCIONAL */}
+        {/* ENCABEZADO CON LOGO OFICIAL CENTRADO */}
         <View style={styles.header}>
-          <View style={styles.shieldWrapper}>
-            <View style={styles.shieldCircle}>
-              <Ionicons name="shield-checkmark" size={48} color="#264653" />
-            </View>
-            <View style={styles.onlineBadge}>
-              <View style={styles.onlineDot} />
-            </View>
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../assets/logo.png')} 
+              style={styles.logoImage} 
+              resizeMode="contain" 
+            />
           </View>
 
           <View style={styles.municipalityBadge}>
-            <Ionicons name="location-sharp" size={12} color="#2A9D8F" style={{ marginRight: 4 }} />
+            <Ionicons name="location-sharp" size={13} color="#2A9D8F" style={{ marginRight: 4 }} />
             <Text style={styles.municipalityText}>SAN ISIDRO DE LULES</Text>
           </View>
 
@@ -152,8 +150,15 @@ export default function LoginScreen({ navigation }: any) {
 
         {/* TARJETA DEL FORMULARIO */}
         <View style={styles.formCard}>
-          <Text style={styles.cardHeaderTitle}>Iniciar Sesión</Text>
-          <Text style={styles.cardHeaderSubtitle}>Ingresa con tu documento de identidad</Text>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>Iniciar Sesión</Text>
+              <Text style={styles.cardHeaderSubtitle}>Ingresa con tu documento de identidad</Text>
+            </View>
+            <View style={styles.cardHeaderIconBox}>
+              <Ionicons name="shield-checkmark" size={20} color="#2A9D8F" />
+            </View>
+          </View>
 
           {/* CAMPO DNI */}
           <Text style={styles.fieldLabel}>DNI del Ciudadano</Text>
@@ -271,7 +276,7 @@ export default function LoginScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#F1F5F9' 
+    backgroundColor: '#F4F7F6' 
   },
   scrollContent: { 
     flexGrow: 1, 
@@ -280,49 +285,29 @@ const styles = StyleSheet.create({
   },
   header: { 
     alignItems: 'center', 
-    marginBottom: 24, 
+    marginBottom: 20, 
   },
-  shieldWrapper: {
-    position: 'relative',
-    marginBottom: 14,
-  },
-  shieldCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#FFFFFF',
+  logoContainer: {
+    width: 130,
+    height: 130,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    shadowColor: '#264653',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 5,
+    marginBottom: 8,
   },
-  onlineBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 3,
-  },
-  onlineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10B981',
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   municipalityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E6F4F1',
+    borderWidth: 1,
+    borderColor: '#C7E8E2',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   municipalityText: {
     fontSize: 11,
@@ -331,43 +316,56 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   title: { 
-    fontSize: 28, 
+    fontSize: 27, 
     fontWeight: '900', 
     color: '#1E293B', 
     letterSpacing: -0.5 
   },
   subtitle: { 
     fontSize: 13, 
-    color: '#64748B', 
+    color: '#475569', 
     textAlign: 'center', 
-    marginTop: 6,
+    marginTop: 4,
     lineHeight: 18,
     paddingHorizontal: 16,
     fontWeight: '500',
   },
   formCard: { 
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 5,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   cardHeaderTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
     color: '#1E293B',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   cardHeaderSubtitle: {
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
-    marginBottom: 16,
+  },
+  cardHeaderIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#E6F4F1',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fieldLabel: {
     fontSize: 13,
@@ -389,6 +387,10 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#264653',
     backgroundColor: '#FFFFFF',
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   inputErrorBorder: { 
     borderColor: '#DC2626', 
@@ -432,9 +434,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     shadowColor: '#264653', 
     shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.25, 
+    shadowOpacity: 0.3, 
     shadowRadius: 8, 
-    elevation: 4,
+    elevation: 5,
   },
   loginBtnDisabled: { 
     backgroundColor: '#94A3B8', 
@@ -453,7 +455,7 @@ const styles = StyleSheet.create({
   },
   footerContainer: {
     alignItems: 'center',
-    marginTop: 22,
+    marginTop: 20,
   },
   footerQuestion: {
     fontSize: 13,
@@ -470,11 +472,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   registerPillText: {
     fontSize: 13,

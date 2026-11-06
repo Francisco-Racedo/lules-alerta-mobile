@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, ScrollView, Alert, Modal, FlatList, Keyboard, ActivityIndicator 
+  KeyboardAvoidingView, Platform, ScrollView, Alert, Modal, FlatList, Keyboard, ActivityIndicator, Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -121,7 +121,6 @@ export default function RegisterScreen({ navigation }: any) {
         return;
       }
 
-      // Éxito: el servidor guardó al usuario
       Alert.alert(
         '¡Registro Exitoso!', 
         'Tu cuenta ciudadana ha sido creada correctamente. Ahora puedes iniciar sesión con tu DNI.', 
@@ -145,20 +144,20 @@ export default function RegisterScreen({ navigation }: any) {
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView 
         contentContainerStyle={[
           styles.scrollContent, 
           { 
-            paddingTop: Math.max(insets.top + 16, 24), 
+            paddingTop: Math.max(insets.top + 12, 20), 
             paddingBottom: Math.max(insets.bottom + 36, 48) 
           }
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* BOTÓN VOLVER ATRÁS */}
+        {/* BOTÓN VOLVER ARRIBA A LA IZQUIERDA */}
         <TouchableOpacity 
           style={styles.backBtn} 
           onPress={() => navigation.goBack()} 
@@ -170,22 +169,30 @@ export default function RegisterScreen({ navigation }: any) {
           <Ionicons name="arrow-back" size={22} color="#1E293B" />
         </TouchableOpacity>
 
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO CON LOGO OFICIAL CENTRADO */}
         <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../assets/logo.png')} 
+              style={styles.logoImage} 
+              resizeMode="contain" 
+            />
+          </View>
+
           <View style={styles.badgeWrapper}>
-            <Ionicons name="shield-checkmark" size={14} color="#2A9D8F" style={{ marginRight: 4 }} />
-            <Text style={styles.badgeText}>ALTA CIUDADANA</Text>
+            <Ionicons name="shield-checkmark" size={13} color="#2A9D8F" style={{ marginRight: 4 }} />
+            <Text style={styles.badgeText}>ALTA CIUDADANA • SAN ISIDRO DE LULES</Text>
           </View>
           <Text style={styles.title}>Crear Cuenta</Text>
           <Text style={styles.subtitle}>
-            Ingresa tus datos reales. Esta información será indispensable para la respuesta coordinada de emergencias.
+            Ingresa tus datos reales para la atención coordinada ante situaciones de emergencia.
           </Text>
         </View>
 
         {/* TARJETA DEL FORMULARIO */}
         <View style={styles.formCard}>
           {/* NOMBRE */}
-          <Text style={styles.label}>Nombre y Apellido</Text>
+          <Text style={styles.fieldLabel}>Nombre y Apellido</Text>
           <View style={[
             styles.inputContainer,
             focusedInput === 'nombre' && styles.inputFocused,
@@ -212,7 +219,7 @@ export default function RegisterScreen({ navigation }: any) {
           {errores.nombre ? <Text style={styles.errorText}>{errores.nombre}</Text> : null}
 
           {/* DNI */}
-          <Text style={styles.label}>DNI (Sin puntos)</Text>
+          <Text style={styles.fieldLabel}>DNI (Sin puntos)</Text>
           <View style={[
             styles.inputContainer,
             focusedInput === 'dni' && styles.inputFocused,
@@ -240,7 +247,7 @@ export default function RegisterScreen({ navigation }: any) {
           {errores.dni ? <Text style={styles.errorText}>{errores.dni}</Text> : null}
 
           {/* TELÉFONO */}
-          <Text style={styles.label}>Teléfono Móvil (Con código de área)</Text>
+          <Text style={styles.fieldLabel}>Teléfono Móvil (Con código de área)</Text>
           <View style={[
             styles.inputContainer,
             focusedInput === 'telefono' && styles.inputFocused,
@@ -269,8 +276,10 @@ export default function RegisterScreen({ navigation }: any) {
 
           {/* BARRIO O ZONA (SELECTOR CON MODAL) */}
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Barrio o Zona de Lules</Text>
-            <Text style={styles.optionalBadge}>Opcional</Text>
+            <Text style={styles.fieldLabel}>Barrio o Zona de Lules</Text>
+            <View style={styles.optionalBadgeBox}>
+              <Text style={styles.optionalBadgeText}>Recomendado</Text>
+            </View>
           </View>
           <TouchableOpacity 
             style={[
@@ -294,11 +303,11 @@ export default function RegisterScreen({ navigation }: any) {
             <Text style={[styles.selectorText, !barrio && styles.placeholderText]} numberOfLines={1}>
               {barrio || 'Selecciona tu barrio de residencia'}
             </Text>
-            <Ionicons name="chevron-down" size={18} color="#64748B" />
+            <Ionicons name="chevron-down" size={18} color="#2A9D8F" />
           </TouchableOpacity>
 
           {/* CONTRASEÑA */}
-          <Text style={styles.label}>Contraseña</Text>
+          <Text style={styles.fieldLabel}>Contraseña</Text>
           <View style={[
             styles.inputContainer,
             focusedInput === 'password' && styles.inputFocused,
@@ -348,7 +357,7 @@ export default function RegisterScreen({ navigation }: any) {
               <ActivityIndicator color="#fff" />
             ) : (
               <View style={styles.btnContent}>
-                <Ionicons name="shield-checkmark-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Ionicons name="shield-checkmark" size={18} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={styles.registerText}>CREAR MI CUENTA CIUDADANA</Text>
               </View>
             )}
@@ -395,7 +404,7 @@ export default function RegisterScreen({ navigation }: any) {
 
             {/* BUSCADOR DENTRO DEL MODAL */}
             <View style={styles.modalSearchBox}>
-              <Ionicons name="search-outline" size={18} color="#64748B" />
+              <Ionicons name="search-outline" size={18} color="#2A9D8F" />
               <TextInput
                 style={styles.modalSearchInput}
                 placeholder="Buscar barrio o zona..."
@@ -454,40 +463,53 @@ export default function RegisterScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#F1F5F9' 
+    backgroundColor: '#F4F7F6' 
   },
   scrollContent: { 
     flexGrow: 1, 
     paddingHorizontal: 22 
   },
   backBtn: { 
-    width: 42, 
-    height: 42, 
+    width: 44, 
+    height: 44, 
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center', 
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
     elevation: 2,
   },
   header: { 
-    marginBottom: 20 
+    alignItems: 'center',
+    marginBottom: 18 
+  },
+  logoContainer: {
+    width: 105,
+    height: 105,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   badgeWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E6F4F1',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#C7E8E2',
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   badgeText: {
     fontSize: 10,
@@ -503,24 +525,26 @@ const styles = StyleSheet.create({
   },
   subtitle: { 
     fontSize: 13, 
-    color: '#64748B', 
+    color: '#475569', 
     marginTop: 4, 
     lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: 10,
     fontWeight: '500',
   },
   formCard: { 
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 5,
   },
-  label: { 
+  fieldLabel: { 
     fontSize: 13, 
     fontWeight: '700', 
     color: '#334155', 
@@ -532,10 +556,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  optionalBadge: {
+  optionalBadgeBox: {
+    backgroundColor: '#E6F4F1',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  optionalBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
+    fontWeight: '700',
+    color: '#2A9D8F',
   },
   inputContainer: { 
     flexDirection: 'row', 
@@ -551,6 +581,10 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#264653',
     backgroundColor: '#FFFFFF',
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   inputErrorBorder: { 
     borderColor: '#DC2626', 
@@ -580,8 +614,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   selectorSelected: {
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#C7E8E2',
+    backgroundColor: '#F0FDF4',
   },
   selectorText: {
     flex: 1,
@@ -602,9 +636,9 @@ const styles = StyleSheet.create({
     marginTop: 8, 
     shadowColor: '#264653', 
     shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.25, 
+    shadowOpacity: 0.3, 
     shadowRadius: 8, 
-    elevation: 4 
+    elevation: 5 
   },
   registerBtnDisabled: { 
     backgroundColor: '#94A3B8', 
@@ -623,7 +657,7 @@ const styles = StyleSheet.create({
   },
   loginLinkContainer: {
     alignItems: 'center',
-    marginTop: 22,
+    marginTop: 20,
   },
   loginLinkPrompt: {
     fontSize: 13,
@@ -691,7 +725,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     marginBottom: 12,
   },
