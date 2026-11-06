@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, Keyboard, Alert, ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   BASE_URL,
@@ -15,6 +16,7 @@ import {
 import { registerDeviceForPushNotifications } from '../services/pushNotifications';
 
 export default function LoginScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const [dni, setDni] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,6 +24,7 @@ export default function LoginScreen({ navigation }: any) {
 
   const [dniError, setDniError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [focusedInput, setFocusedInput] = useState<'dni' | 'password' | null>(null);
 
   const handleDniChange = (text: string) => {
     const numericValue = text.replace(/[^0-9]/g, '');
@@ -72,7 +75,7 @@ export default function LoginScreen({ navigation }: any) {
         const message = getErrorMessage(data);
         Alert.alert(
           'Error de Autenticación',
-          message || 'Credenciales incorrectas',
+          message || 'Credenciales incorrectas.',
         );
         return;
       }
@@ -96,13 +99,13 @@ export default function LoginScreen({ navigation }: any) {
         );
       }
 
-      // Redirección directa al mapa sin posibilidad de volver atrás con el botón nativo
+      // Redirección directa al mapa principal
       navigation.replace('MainTabs');
 
     } catch {
       Alert.alert(
         'Error de Conexión',
-        'No pudimos conectarnos con el servidor. Inténtalo nuevamente.',
+        'No pudimos conectarnos con el servidor. Verifica tu conexión a internet.',
       );
     } finally {
       setIsLoading(false);
@@ -115,71 +118,149 @@ export default function LoginScreen({ navigation }: any) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView 
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top + 20, 36),
+            paddingBottom: Math.max(insets.bottom + 24, 32),
+          }
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* ENCABEZADO INSTITUCIONAL */}
         <View style={styles.header}>
-          <Ionicons name="shield-checkmark" size={80} color="#E63946" />
+          <View style={styles.shieldWrapper}>
+            <View style={styles.shieldCircle}>
+              <Ionicons name="shield-checkmark" size={48} color="#264653" />
+            </View>
+            <View style={styles.onlineBadge}>
+              <View style={styles.onlineDot} />
+            </View>
+          </View>
+
+          <View style={styles.municipalityBadge}>
+            <Ionicons name="location-sharp" size={12} color="#2A9D8F" style={{ marginRight: 4 }} />
+            <Text style={styles.municipalityText}>SAN ISIDRO DE LULES</Text>
+          </View>
+
           <Text style={styles.title}>Lules Alerta</Text>
-          <Text style={styles.subtitle}>Tu conexión directa con la seguridad y servicios municipales</Text>
+          <Text style={styles.subtitle}>
+            Portal ciudadano de seguridad, reportes urbanos y emergencias comunales
+          </Text>
         </View>
 
-        <View style={styles.formContainer}>
-          <View style={[styles.inputContainer, dniError ? styles.inputErrorBorder : null]}>
-            <Ionicons name="card-outline" size={20} color={dniError ? "#E63946" : "#666"} style={styles.icon} />
+        {/* TARJETA DEL FORMULARIO */}
+        <View style={styles.formCard}>
+          <Text style={styles.cardHeaderTitle}>Iniciar Sesión</Text>
+          <Text style={styles.cardHeaderSubtitle}>Ingresa con tu documento de identidad</Text>
+
+          {/* CAMPO DNI */}
+          <Text style={styles.fieldLabel}>DNI del Ciudadano</Text>
+          <View style={[
+            styles.inputContainer,
+            focusedInput === 'dni' && styles.inputFocused,
+            dniError ? styles.inputErrorBorder : null
+          ]}>
+            <Ionicons 
+              name="card-outline" 
+              size={20} 
+              color={dniError ? "#DC2626" : (focusedInput === 'dni' ? "#264653" : "#64748B")} 
+              style={styles.icon} 
+            />
             <TextInput
               style={styles.input}
-              placeholder="Número de DNI"
-              placeholderTextColor="#777"
+              placeholder="Número de DNI (sin puntos)"
+              placeholderTextColor="#94A3B8"
               keyboardType="numeric"
               maxLength={8}
               value={dni}
               onChangeText={handleDniChange}
+              onFocus={() => setFocusedInput('dni')}
+              onBlur={() => setFocusedInput(null)}
               editable={!isLoading}
             />
           </View>
           {dniError ? <Text style={styles.errorText}>{dniError}</Text> : null}
 
-          <View style={[styles.inputContainer, passwordError ? styles.inputErrorBorder : null, { marginBottom: passwordError ? 0 : 15 }]}>
-            <Ionicons name="lock-closed-outline" size={20} color={passwordError ? "#E63946" : "#666"} style={styles.icon} />
+          {/* CAMPO CONTRASEÑA */}
+          <Text style={styles.fieldLabel}>Contraseña de Acceso</Text>
+          <View style={[
+            styles.inputContainer,
+            focusedInput === 'password' && styles.inputFocused,
+            passwordError ? styles.inputErrorBorder : null,
+            { marginBottom: passwordError ? 4 : 12 }
+          ]}>
+            <Ionicons 
+              name="lock-closed-outline" 
+              size={20} 
+              color={passwordError ? "#DC2626" : (focusedInput === 'password' ? "#264653" : "#64748B")} 
+              style={styles.icon} 
+            />
             <TextInput
               style={styles.input}
-              placeholder="Contraseña"
-              placeholderTextColor="#777"
+              placeholder="Tu contraseña personal"
+              placeholderTextColor="#94A3B8"
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={handlePasswordChange}
+              onFocus={() => setFocusedInput('password')}
+              onBlur={() => setFocusedInput(null)}
               editable={!isLoading}
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon} disabled={isLoading}>
-              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color="#666" />
+            <TouchableOpacity 
+              onPress={() => setShowPassword(!showPassword)} 
+              style={styles.eyeIcon} 
+              disabled={isLoading}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons 
+                name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                size={20} 
+                color="#64748B" 
+              />
             </TouchableOpacity>
           </View>
           {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-          <TouchableOpacity 
-            style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]} 
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.loginText}>INGRESAR</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.registerLink} onPress={() => navigation.navigate('Register')} disabled={isLoading}>
-            <Text style={styles.registerText}>¿No tienes cuenta? <Text style={styles.registerTextBold}>Regístrate aquí</Text></Text>
-          </TouchableOpacity>
-
+          {/* OLVIDÉ CONTRASEÑA */}
           <TouchableOpacity
             style={styles.recoveryLink}
             onPress={() => navigation.navigate('ForgotPassword')}
             disabled={isLoading}
           >
             <Text style={styles.recoveryText}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+
+          {/* BOTÓN INGRESAR */}
+          <TouchableOpacity 
+            style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]} 
+            onPress={handleLogin}
+            disabled={isLoading}
+            activeOpacity={0.85}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={styles.btnContent}>
+                <Text style={styles.loginText}>INGRESAR AL SISTEMA</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* PIE / ENLACE DE REGISTRO */}
+        <View style={styles.footerContainer}>
+          <Text style={styles.footerQuestion}>¿Primera vez en Lules Alerta?</Text>
+          <TouchableOpacity 
+            style={styles.registerPill}
+            onPress={() => navigation.navigate('Register')} 
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-add-outline" size={16} color="#264653" style={{ marginRight: 6 }} />
+            <Text style={styles.registerPillText}>Crear una cuenta ciudadana</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -188,24 +269,216 @@ export default function LoginScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingVertical: 40 },
-  header: { alignItems: 'center', marginBottom: 40, paddingHorizontal: 20 },
-  title: { fontSize: 32, fontWeight: '900', color: '#333', marginTop: 10, letterSpacing: 1 },
-  subtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginTop: 5 },
-  formContainer: { paddingHorizontal: 30 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 15, marginBottom: 15, borderWidth: 1, borderColor: '#ddd', height: 55 },
-  inputErrorBorder: { borderColor: '#E63946', borderWidth: 1.5, marginBottom: 4 }, 
-  errorText: { color: '#E63946', fontSize: 12, marginBottom: 15, marginLeft: 5, fontWeight: '600' }, 
-  icon: { marginRight: 10 },
-  input: { flex: 1, fontSize: 16, color: '#333' },
-  eyeIcon: { padding: 5 },
-  loginBtn: { backgroundColor: '#E63946', borderRadius: 10, height: 55, alignItems: 'center', justifyContent: 'center', marginTop: 10, shadowColor: '#E63946', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
-  loginBtnDisabled: { backgroundColor: '#e57373', shadowOpacity: 0 },
-  loginText: { color: '#fff', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
-  registerLink: { marginTop: 20, alignItems: 'center' },
-  registerText: { color: '#666', fontSize: 14 },
-  registerTextBold: { color: '#E63946', fontWeight: 'bold' },
-  recoveryLink: { marginTop: 18, alignItems: 'center' },
-  recoveryText: { color: '#E63946', fontSize: 14, fontWeight: 'bold' }
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F1F5F9' 
+  },
+  scrollContent: { 
+    flexGrow: 1, 
+    justifyContent: 'center', 
+    paddingHorizontal: 22,
+  },
+  header: { 
+    alignItems: 'center', 
+    marginBottom: 24, 
+  },
+  shieldWrapper: {
+    position: 'relative',
+    marginBottom: 14,
+  },
+  shieldCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    shadowColor: '#264653',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 3,
+  },
+  onlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+  },
+  municipalityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E6F4F1',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  municipalityText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#264653',
+    letterSpacing: 0.8,
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: '900', 
+    color: '#1E293B', 
+    letterSpacing: -0.5 
+  },
+  subtitle: { 
+    fontSize: 13, 
+    color: '#64748B', 
+    textAlign: 'center', 
+    marginTop: 6,
+    lineHeight: 18,
+    paddingHorizontal: 16,
+    fontWeight: '500',
+  },
+  formCard: { 
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  cardHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: -0.2,
+  },
+  cardHeaderSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  inputContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F8FAFC', 
+    borderRadius: 14, 
+    paddingHorizontal: 14, 
+    marginBottom: 14, 
+    borderWidth: 1.5, 
+    borderColor: '#E2E8F0', 
+    height: 52 
+  },
+  inputFocused: {
+    borderColor: '#264653',
+    backgroundColor: '#FFFFFF',
+  },
+  inputErrorBorder: { 
+    borderColor: '#DC2626', 
+    backgroundColor: '#FEF2F2',
+    marginBottom: 4 
+  }, 
+  errorText: { 
+    color: '#DC2626', 
+    fontSize: 12, 
+    marginBottom: 12, 
+    marginLeft: 4, 
+    fontWeight: '600' 
+  }, 
+  icon: { 
+    marginRight: 10 
+  },
+  input: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  eyeIcon: { 
+    padding: 6 
+  },
+  recoveryLink: { 
+    alignSelf: 'flex-end',
+    marginBottom: 18,
+    marginTop: 2,
+  },
+  recoveryText: { 
+    color: '#264653', 
+    fontSize: 13, 
+    fontWeight: '700' 
+  },
+  loginBtn: { 
+    backgroundColor: '#264653', 
+    borderRadius: 14, 
+    height: 52, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    shadowColor: '#264653', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.25, 
+    shadowRadius: 8, 
+    elevation: 4,
+  },
+  loginBtnDisabled: { 
+    backgroundColor: '#94A3B8', 
+    shadowOpacity: 0 
+  },
+  btnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginText: { 
+    color: '#FFFFFF', 
+    fontSize: 15, 
+    fontWeight: '800', 
+    letterSpacing: 0.6 
+  },
+  footerContainer: {
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  footerQuestion: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  registerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  registerPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#264653',
+  },
 });

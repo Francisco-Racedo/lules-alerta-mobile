@@ -11,22 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import Toast from 'react-native-toast-message';
 import { BASE_URL, getAssetUrl } from '../services/auth';
-
-const BARRIOS_LULES = [
-  'Centro',
-  'Barrio Pilar',
-  'La Reducción',
-  'El Manantial',
-  'Mercedes',
-  'San Rafael',
-  'Las Tipas',
-  'Villa del Carmen',
-  '25 de Mayo',
-  '9 de Julio',
-  'Belgrano',
-  'San Martín',
-  'La Quebrada',
-];
+import { BARRIOS_LULES } from '../constants/lules';
 
 type EditProfileNavigation = {
   goBack: () => void;
