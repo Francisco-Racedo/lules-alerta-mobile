@@ -152,9 +152,7 @@ export default function AppNavigator() {
         name="ReportForm" 
         component={ReportFormScreen} 
         options={{ 
-          title: 'Detalles del Reporte',
-          headerStyle: { backgroundColor: '#E63946' },
-          headerTintColor: '#fff',
+          headerShown: false,
           presentation: 'modal'
         }} 
       />

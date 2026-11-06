@@ -21,6 +21,7 @@ import * as Location from 'expo-location';
 import { BASE_URL } from '../services/auth';
 
 const MAX_IMAGES = 5;
+const QUICK_HINTS = ['¿Hay heridos?', 'Tránsito cortado', 'Cables caídos', 'Urgente'];
 
 const normalizeAddress = (address: string): string =>
   address
@@ -75,10 +76,10 @@ export default function ReportFormScreen({ route, navigation }: any) {
     if (normalized.includes('bombe') || normalized.includes('fuego') || normalized.includes('incendio')) {
       return { icon: 'flame', color: '#E76F51', backgroundColor: '#FEF4E8' };
     }
-    if (normalized.includes('infraestructura') || normalized.includes('bache') || normalized.includes('calle') || normalized.includes('luz')) {
-      return { icon: 'construct', color: '#8B572A', backgroundColor: '#F6EFEA' };
+    if (normalized.includes('infraestructura') || normalized.includes('servicio') || normalized.includes('bache') || normalized.includes('calle') || normalized.includes('luz')) {
+      return { icon: 'construct', color: '#D97706', backgroundColor: '#FEF3C7' };
     }
-    return { icon: 'alert-circle', color: '#E63946', backgroundColor: '#FEE4E2' };
+    return { icon: 'alert-circle', color: '#1D70B8', backgroundColor: '#EBF3FC' };
   };
 
   const categoryConfig = getCategoryConfig(category);
@@ -145,16 +146,46 @@ export default function ReportFormScreen({ route, navigation }: any) {
     }
   };
 
-  const handlePickImage = async () => {
-    const remainingSlots = MAX_IMAGES - selectedImages.length;
+  const handleAddHint = (hint: string) => {
+    setDescription((prev) => {
+      if (!prev.trim()) return `${hint}: `;
+      if (prev.includes(hint)) return prev;
+      return `${prev.trim()} · ${hint}: `;
+    });
+  };
 
+  const handleTakePhoto = async () => {
+    const remainingSlots = MAX_IMAGES - selectedImages.length;
+    if (remainingSlots <= 0) {
+      Toast.show({ type: 'error', text1: 'Límite alcanzado', text2: `Puedes adjuntar hasta ${MAX_IMAGES} fotografías.`, position: 'top' });
+      return;
+    }
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Toast.show({ type: 'error', text1: 'Permiso denegado', text2: 'Se requiere acceso a la cámara.', position: 'top' });
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.6,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+    setSelectedImages((currentImages) => [...currentImages, result.assets[0]].slice(0, MAX_IMAGES));
+  };
+
+  const handlePickGalleryImage = async () => {
+    const remainingSlots = MAX_IMAGES - selectedImages.length;
     if (remainingSlots <= 0) {
       Toast.show({ type: 'error', text1: 'Límite alcanzado', text2: `Puedes adjuntar hasta ${MAX_IMAGES} fotografías.`, position: 'top' });
       return;
     }
 
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     if (!permissionResult.granted) {
       Toast.show({ type: 'error', text1: 'Permiso denegado', text2: 'Se requiere acceso a la galería.', position: 'top' });
       return;
@@ -165,15 +196,14 @@ export default function ReportFormScreen({ route, navigation }: any) {
       allowsMultipleSelection: true,
       selectionLimit: remainingSlots,
       allowsEditing: false,
-      quality: 0.5,
+      quality: 0.6,
     });
 
-    if (result.canceled || result.assets.length === 0) return;
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
 
     const availableAssets = result.assets.slice(0, remainingSlots);
-
     setSelectedImages((currentImages) => {
-      const currentUris = new Set(currentImages.map((currentImage) => currentImage.uri));
+      const currentUris = new Set(currentImages.map((img) => img.uri));
       const newAssets = availableAssets.filter((asset) => !currentUris.has(asset.uri));
       return [...currentImages, ...newAssets].slice(0, MAX_IMAGES);
     });
@@ -266,56 +296,118 @@ export default function ReportFormScreen({ route, navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+      {/* HEADER CÍVICO LIMPIO */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Volver atrás"
+        >
+          <Ionicons name="arrow-back" size={24} color="#1A1D20" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Detalles del Reporte</Text>
+        <View style={styles.spacer} />
+      </View>
+
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40, paddingTop: 16 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom + 44, 60) },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.categoryHeaderCard, { backgroundColor: categoryConfig.backgroundColor }]}>
-          <View style={[styles.categoryIconCircle, { backgroundColor: '#fff' }]}>
-            <Ionicons name={categoryConfig.icon} size={28} color={categoryConfig.color} />
+        {/* CATEGORÍA SELECCIONADA */}
+        <View style={[styles.categoryHeaderCard, { backgroundColor: categoryConfig.backgroundColor, borderColor: categoryConfig.color + '33' }]}>
+          <View style={[styles.categoryIconCircle, { backgroundColor: categoryConfig.color }]}>
+            <Ionicons name={categoryConfig.icon} size={24} color="#fff" />
           </View>
           <View style={styles.categoryTextWrapper}>
-            <Text style={[styles.categorySubtitle, { color: categoryConfig.color }]}>Categoría Seleccionada</Text>
+            <Text style={[styles.categorySubtitle, { color: categoryConfig.color }]}>Área Municipal</Text>
             <Text style={[styles.categoryTitle, { color: categoryConfig.color }]}>{category || 'General'}</Text>
           </View>
+          <TouchableOpacity 
+            style={[styles.changeCategoryBtn, { borderColor: categoryConfig.color + '40' }]}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="sync-outline" size={14} color={categoryConfig.color} />
+            <Text style={[styles.changeCategoryText, { color: categoryConfig.color }]}>Cambiar</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.civicCard}>
-          <View style={styles.civicRow}>
-            <View style={styles.civicIconBox}>
-              <Ionicons name="location-outline" size={22} color="#1D70B8" />
-            </View>
-            <View style={styles.civicTextContent}>
-              <Text style={styles.civicLabel}>Ubicación del incidente</Text>
-              <Text style={styles.civicValue} numberOfLines={2}>{addressText}</Text>
-              <Text style={styles.coordText}>GPS: {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}</Text>
-            </View>
-          </View>
-        </View>
-
+        {/* UBICACIÓN DEL INCIDENTE */}
         <View style={styles.civicCard}>
           <View style={styles.civicRowHeader}>
-            <Ionicons name="document-text-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
-            <Text style={styles.civicLabel}>Detalles del suceso</Text>
+            <View style={styles.civicIconBox}>
+              <Ionicons name="location-outline" size={18} color="#1D70B8" />
+            </View>
+            <Text style={styles.civicLabel}>Ubicación del incidente</Text>
           </View>
+          <Text style={styles.civicValue} numberOfLines={2}>{addressText}</Text>
+          <View style={styles.gpsPill}>
+            <Ionicons name="navigate-circle" size={14} color="#10B981" />
+            <Text style={styles.coordText}>GPS: {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}</Text>
+          </View>
+        </View>
+
+        {/* DETALLES DEL SUCESO */}
+        <View style={styles.civicCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.civicRowHeader}>
+              <View style={[styles.civicIconBox, styles.detailsIconBox]}>
+                <Ionicons name="document-text-outline" size={18} color="#334155" />
+              </View>
+              <Text style={styles.civicLabel}>Detalles del suceso</Text>
+            </View>
+            <View style={styles.requiredBadge}>
+              <Text style={styles.requiredBadgeText}>Obligatorio</Text>
+            </View>
+          </View>
+
+          {/* CHIPS RÁPIDOS DE SUGERENCIA */}
+          <View style={styles.chipsRow}>
+            {QUICK_HINTS.map((hint) => (
+              <TouchableOpacity
+                key={hint}
+                style={styles.chipButton}
+                onPress={() => handleAddHint(hint)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={13} color="#475569" />
+                <Text style={styles.chipText}>{hint}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <TextInput
             style={[styles.textInput, isFocused && styles.textInputFocused]}
-            placeholder="Describe qué está sucediendo. ¿Hay heridos? ¿Es urgente?..."
+            placeholder="Describe qué está sucediendo, referencias de calles o personas involucradas..."
             placeholderTextColor="#94A3B8"
             multiline
+            maxLength={500}
             value={description}
             onChangeText={setDescription}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
           />
+
+          <View style={styles.counterRow}>
+            <Text style={styles.counterText}>{description.length} / 500 caracteres</Text>
+          </View>
         </View>
 
+        {/* EVIDENCIA FOTOGRÁFICA */}
         <View style={styles.civicCard}>
           <View style={styles.evidenceHeader}>
             <View style={styles.civicRowHeader}>
-              <Ionicons name="camera-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
-              <Text style={styles.civicLabel}>Evidencia (Opcional)</Text>
+              <View style={[styles.civicIconBox, styles.cameraIconBox]}>
+                <Ionicons name="camera-outline" size={18} color="#264653" />
+              </View>
+              <Text style={styles.civicLabel}>Evidencia Fotográfica</Text>
             </View>
             <View style={styles.imageCounterBadge}>
               <Text style={styles.imageCounterText}>{selectedImages.length} / {MAX_IMAGES}</Text>
@@ -335,54 +427,62 @@ export default function ReportFormScreen({ route, navigation }: any) {
                     onPress={() => handleRemoveImage(index)}
                     disabled={isSubmitting}
                     activeOpacity={0.8}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    <Ionicons name="close-circle" size={24} color="#fff" />
+                    <Ionicons name="close-circle" size={22} color="#DC2626" />
                   </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
           )}
 
-          <TouchableOpacity
-            style={[
-              styles.uploadDropzone,
-              selectedImages.length >= MAX_IMAGES && styles.uploadDropzoneDisabled,
-            ]}
-            onPress={handlePickImage}
-            disabled={isSubmitting || selectedImages.length >= MAX_IMAGES}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={selectedImages.length >= MAX_IMAGES ? 'checkmark-circle' : 'cloud-upload-outline'}
-              size={32}
-              color={selectedImages.length >= MAX_IMAGES ? '#10B981' : '#64748B'}
-              style={{ marginBottom: 8 }}
-            />
-            <Text style={styles.uploadDropzoneText}>
-              {selectedImages.length >= MAX_IMAGES
-                ? 'Límite máximo de fotos alcanzado'
-                : selectedImages.length === 0
-                  ? 'Toca para seleccionar fotografías'
-                  : 'Toca para agregar otra fotografía'}
-            </Text>
-            <Text style={styles.uploadDropzoneHint}>
-              Formatos soportados: JPG, PNG
-            </Text>
-          </TouchableOpacity>
+          {selectedImages.length < MAX_IMAGES ? (
+            <View style={styles.photoActionsBox}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.cameraActionBtn]}
+                onPress={handleTakePhoto}
+                disabled={isSubmitting}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="camera" size={19} color="#264653" />
+                <Text style={styles.cameraActionBtnText}>Tomar Foto</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.galleryActionBtn]}
+                onPress={handlePickGalleryImage}
+                disabled={isSubmitting}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="images" size={19} color="#059669" />
+                <Text style={styles.galleryActionBtnText}>Galería</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.maxImagesReached}>
+              <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+              <Text style={styles.maxImagesText}>Límite máximo de 5 fotografías alcanzado</Text>
+            </View>
+          )}
         </View>
 
+        {/* BOTÓN ENVIAR REPORTE OFICIAL */}
         <TouchableOpacity
-          style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton,
+            { backgroundColor: categoryConfig.color, shadowColor: categoryConfig.color },
+            isSubmitting && styles.submitButtonDisabled
+          ]}
           onPress={handleSubmitReport}
           disabled={isSubmitting}
           activeOpacity={0.85}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#fff" size="small" />
           ) : (
             <View style={styles.submitContent}>
+              <Ionicons name="send" size={18} color="#fff" style={styles.submitIcon} />
               <Text style={styles.submitButtonText}>ENVIAR REPORTE OFICIAL</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" style={styles.submitIcon} />
             </View>
           )}
         </TouchableOpacity>
@@ -394,136 +494,312 @@ export default function ReportFormScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFBFC',
+    backgroundColor: '#F1F5F9',
   },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    backgroundColor: '#fff', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  backButton: { padding: 8, marginLeft: -8 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#1A1D20', letterSpacing: -0.3 },
+  spacer: { width: 40 },
   content: {
     padding: 16,
+    flexGrow: 1,
   },
 
   categoryHeaderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    padding: 14,
+    borderRadius: 18,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
   categoryIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   categoryTextWrapper: {
-    marginLeft: 16,
+    marginLeft: 14,
     flex: 1,
   },
   categorySubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    opacity: 0.8,
   },
   categoryTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     marginTop: 2,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
+  },
+  changeCategoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: '#fff',
+    gap: 4,
+  },
+  changeCategoryText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   civicCard: { 
     backgroundColor: '#fff', 
-    borderRadius: 16, 
+    borderRadius: 18, 
     padding: 16, 
     marginBottom: 16, 
     borderWidth: 1, 
-    borderColor: '#ECEFF1', 
+    borderColor: '#E2E8F0', 
     shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.03, 
-    shadowRadius: 6, 
-    elevation: 1 
+    shadowOffset: { width: 0, height: 1.5 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 4, 
+    elevation: 2,
   },
-  civicRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  civicRowHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  civicIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F0F7FF', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  civicTextContent: { flex: 1, justifyContent: 'center' },
-  civicLabel: { fontSize: 13, color: '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  civicValue: { fontSize: 15, color: '#1E293B', fontWeight: '600', lineHeight: 22 },
-  coordText: { fontSize: 11, color: '#94A3B8', marginTop: 4, fontWeight: '600', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  civicRowHeader: { flexDirection: 'row', alignItems: 'center' },
+  civicIconBox: { 
+    width: 32, 
+    height: 32, 
+    borderRadius: 8, 
+    backgroundColor: '#EBF3FC', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginRight: 10 
+  },
+  detailsIconBox: {
+    backgroundColor: '#F1F5F9',
+  },
+  cameraIconBox: {
+    backgroundColor: '#F0F7F6',
+  },
+  civicLabel: { 
+    fontSize: 13, 
+    color: '#334155', 
+    fontWeight: '800', 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.4,
+  },
+  requiredBadge: { 
+    backgroundColor: '#FEF3C7', 
+    paddingHorizontal: 8, 
+    paddingVertical: 3, 
+    borderRadius: 8 
+  },
+  requiredBadgeText: { color: '#B45309', fontSize: 11, fontWeight: '700' },
+  
+  civicValue: { 
+    fontSize: 15, 
+    color: '#1E293B', 
+    fontWeight: '600', 
+    lineHeight: 22,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  gpsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignSelf: 'flex-start',
+    gap: 5,
+  },
+  coordText: { 
+    fontSize: 11, 
+    color: '#64748B', 
+    fontWeight: '600', 
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+
+  // CHIPS
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  chipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    gap: 5,
+  },
+  chipText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '600',
+  },
 
   textInput: {
     backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
+    borderWidth: 1.2,
     borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 14,
-    minHeight: 120,
+    minHeight: 110,
     textAlignVertical: 'top',
     color: '#1A1D20',
     fontSize: 15,
     lineHeight: 22,
   },
   textInputFocused: {
-    borderColor: '#1D70B8',
-    backgroundColor: '#fff',
-    shadowColor: '#1D70B8',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  evidenceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  imageCounterBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 12 },
-  imageCounterText: { color: '#475569', fontSize: 12, fontWeight: '800' },
-  
-  imageList: { paddingBottom: 16, paddingTop: 4 },
-  imagePreviewContainer: { position: 'relative', marginRight: 12, borderRadius: 12, overflow: 'hidden' },
-  previewImage: { width: 100, height: 100, borderRadius: 12, backgroundColor: '#E2E8F0' },
-  imageOverlay: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(15, 23, 42, 0.7)', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  imageIndexText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  removeImageButton: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(220, 38, 38, 0.9)', borderRadius: 12 },
-
-  uploadDropzone: {
+    borderColor: '#475569',
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    minHeight: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 20,
+    backgroundColor: '#fff',
+    shadowColor: '#475569',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  uploadDropzoneDisabled: { borderColor: '#E2E8F0', backgroundColor: '#F1F5F9' },
-  uploadDropzoneText: { color: '#475569', fontWeight: '700', fontSize: 14, textAlign: 'center' },
-  uploadDropzoneHint: { color: '#94A3B8', fontSize: 12, marginTop: 6, textAlign: 'center' },
+  counterRow: {
+    alignItems: 'flex-end',
+    marginTop: 6,
+  },
+  counterText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
 
-  submitButton: {
-    backgroundColor: '#E63946',
-    paddingVertical: 18,
-    borderRadius: 14,
+  evidenceHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  imageCounterBadge: { 
+    backgroundColor: '#F1F5F9', 
+    paddingHorizontal: 10, 
+    paddingVertical: 3, 
+    borderRadius: 8,
+  },
+  imageCounterText: { color: '#475569', fontSize: 11, fontWeight: '800' },
+  
+  imageList: { paddingBottom: 14, paddingTop: 4 },
+  imagePreviewContainer: { position: 'relative', marginRight: 12, borderRadius: 12, overflow: 'hidden' },
+  previewImage: { width: 92, height: 92, borderRadius: 12, backgroundColor: '#E2E8F0' },
+  imageOverlay: { position: 'absolute', bottom: 6, left: 6, backgroundColor: 'rgba(15, 23, 42, 0.75)', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  imageIndexText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  removeImageButton: { 
+    position: 'absolute', 
+    top: 4, 
+    right: 4, 
+    backgroundColor: '#fff', 
+    borderRadius: 12,
+  },
+
+  photoActionsBox: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#E63946',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    marginTop: 8,
-    marginBottom: 20,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    gap: 8,
   },
-  submitButtonDisabled: { opacity: 0.6 },
+  cameraActionBtn: {
+    backgroundColor: '#F0F7F6',
+    borderColor: '#CBE5E2',
+  },
+  galleryActionBtn: {
+    backgroundColor: '#E6F7F5',
+    borderColor: '#C2EBE5',
+  },
+  cameraActionBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#264653',
+  },
+  galleryActionBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  maxImagesReached: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    gap: 8,
+  },
+  maxImagesText: {
+    color: '#15803D',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // BOTÓN ENVIAR
+  submitButton: {
+    backgroundColor: '#264653',
+    borderRadius: 14,
+    height: 54,
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 16,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+  },
+  submitButtonDisabled: { opacity: 0.7 },
   submitContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  submitButtonText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
-  submitIcon: { marginLeft: 8 },
+  submitButtonText: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+  submitIcon: { marginRight: 8 },
 });
