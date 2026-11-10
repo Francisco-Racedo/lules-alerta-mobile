@@ -4,7 +4,7 @@ import {
   Platform, Alert, Modal, FlatList, Keyboard, ActivityIndicator, Image 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { BASE_URL } from '../services/auth';
 import { BARRIOS_LULES } from '../constants/lules';
@@ -143,13 +143,13 @@ export default function RegisterScreen({ navigation }: any) {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAwareScrollView 
         contentContainerStyle={[
           styles.scrollContent, 
           { 
-            paddingTop: Math.max(insets.top + 12, 20), 
-            paddingBottom: Math.max(insets.bottom + 36, 48) 
+            paddingTop: 12, 
+            paddingBottom: Math.max(insets.bottom, 16) + 40, 
           }
         ]}
         enableOnAndroid={true}
@@ -457,7 +457,7 @@ export default function RegisterScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

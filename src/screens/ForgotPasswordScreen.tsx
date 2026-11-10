@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import {
   BASE_URL,
@@ -141,13 +141,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAwareScrollView
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: Math.max(insets.top + 12, 20),
-            paddingBottom: Math.max(insets.bottom + 32, 40),
+            paddingTop: 12,
+            paddingBottom: Math.max(insets.bottom, 16) + 40,
           }
         ]}
         enableOnAndroid={true}
@@ -366,7 +366,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
           </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -536,6 +536,8 @@ const styles = StyleSheet.create({
   backToLoginBtn: {
     alignItems: 'center',
     marginTop: 20,
+    marginBottom: 16,
+    paddingVertical: 8,
   },
   backToLoginText: {
     fontSize: 13,
